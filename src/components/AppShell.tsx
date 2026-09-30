@@ -14,15 +14,11 @@ export function AppShell() {
   const setActiveRace = useStore((s) => s.setActiveRace);
   const toasts = useStore((s) => s.toasts);
   const dismiss = useStore((s) => s.dismissToast);
-  const theme = useStore((s) => s.settings.theme);
   const isLive = /\/live$/.test(loc.pathname);
   const [collapsed, setCollapsed] = useState(false);
   const rid = raceId ?? activeRaceId ?? races[0]?.id;
   const race = races.find((r) => r.id === rid);
 
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
   useEffect(() => {
     if (raceId && raceId !== activeRaceId) setActiveRace(raceId);
   }, [raceId, activeRaceId, setActiveRace]);

@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { HashRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { AppShell } from './components/AppShell';
 import { AnalysisPage } from './pages/Analysis';
@@ -13,6 +14,10 @@ import { useStore } from './store/store';
 
 export function App() {
   const hydrated = useStore((s) => s.seeded);
+  const theme = useStore((s) => s.settings.theme);
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
   return (
     <HashRouter>
       <Routes>
