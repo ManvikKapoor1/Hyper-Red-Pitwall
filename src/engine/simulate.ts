@@ -558,7 +558,7 @@ function simulateOnce(
       issues.push({
         severity: 'warning',
         code: 'TANK_TOO_SMALL',
-        message: `Stint ${si + 2}: ${nextLaps} laps need ${fuelNeeded.toFixed(1)} L incl. reserve — tank holds ${setup.fuelCapacityL} L`,
+        message: `Stint ${si + 2}: ${nextLaps} laps plus the reserve need ${((fuelNeeded / setup.fuelCapacityL) * 100).toFixed(0)}% of the tank`,
         stint: si + 1,
       });
     }

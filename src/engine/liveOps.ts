@@ -105,13 +105,15 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     const timeKnown = totalMs > expectedMs * delta * 0.5;
     if (!timeKnown) totalMs = (input.lastLapMs ?? expectedMs) + expectedMs * (delta - 1);
     const endSec = timeKnown ? clockEnd : live.lastLapEndSec + totalMs / 1000;
-    const fuelKnown = input.fuelL != null && input.fuelL <= live.fuelL;
-    const fuelAfter = input.fuelL ?? Math.max(0, live.fuelL - fuelRate * delta);
-    const fuelUsedTotal = input.fuelUsedL ?? live.fuelL - fuelAfter;
+    // fuel: remaining as entered, or remaining = before − used, or an estimate from the measured rate
+    const fuelKnown = input.fuelL != null ? input.fuelL <= live.fuelL : input.fuelUsedL != null;
+    const fuelAfter = input.fuelL ?? (input.fuelUsedL != null ? Math.max(0, live.fuelL - input.fuelUsedL) : Math.max(0, live.fuelL - fuelRate * delta));
+    const fuelUsedTotal = live.fuelL - fuelAfter;
     const energyKnown = input.energyPct != null && input.energyPct <= live.energyPct;
     const energyAfter = input.energyPct ?? Math.max(0, live.energyPct - energyRate * delta);
     const energyUsedTotal = live.energyPct - energyAfter;
-    const tireStart = input.tireAge != null && input.tireAge < live.tireAge ? input.tireAge - delta : live.tireAge;
+    // an entered tire age is the age after the last of these laps
+    const tireStart = input.tireAge != null ? input.tireAge - delta : live.tireAge;
     const lastMs = input.lastLapMs;
     const otherMs = lastMs && delta > 1 ? (totalMs - lastMs) / (delta - 1) : totalMs / delta;
     let t = live.lastLapEndSec;
@@ -142,8 +144,13 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     live.fuelL = fuelAfter;
     live.energyPct = energyAfter;
     live.tireAge = input.tireAge ?? live.tireAge + delta;
-    live.lastLapMs = lastMs ?? (timeKnown ? otherMs : live.lastLapMs);
-    if (live.lastLapMs && (!live.bestLapMs || live.lastLapMs < live.bestLapMs)) live.bestLapMs = live.lastLapMs;
+    // a lap time only counts when it is one real lap (not an average over several)
+    const single = lastMs ?? (timeKnown && delta === 1 ? otherMs : null);
+    if (single != null) {
+      live.lastLapMs = single;
+      const lastRec = live.laps[live.laps.length - 1];
+      if (!lastRec.event && (!live.bestLapMs || single < live.bestLapMs)) live.bestLapMs = single;
+    }
   }
 
   if (delta <= 0) {

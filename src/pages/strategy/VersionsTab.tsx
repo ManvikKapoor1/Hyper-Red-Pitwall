@@ -123,7 +123,7 @@ function VersionDiff({ v, tab, u }: { v: StrategyVersion; tab: TabProps; u: Retu
     ['energyPerLapPct', 'Energy per lap', (x) => `${u.n(x, 2)} %`],
     ['racePaceMs', 'Race pace', (x) => `${(x / 1000).toFixed(3)} s`],
     ['pitLaneLossSec', 'Pit-lane loss', (x) => `${u.n(x, 1)} s`],
-    ['refuelRateLps', 'Refuel rate', (x) => `${u.n(x, 2)} L/s`],
+    ['refuelRateLps', 'Refuel rate', (x) => `${u.n(u.fuelVal(x), 2)} ${u.fuelUnit}/s`],
     ['fuelCapacityL', 'Fuel capacity', (x) => u.fuelU(x)],
   ];
   for (const [k, label, f] of keys) {

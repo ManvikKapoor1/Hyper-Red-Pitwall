@@ -3,7 +3,7 @@
  * must never silently accept values that look inconsistent.
  */
 import { measureFuelPerLap } from './live';
-import { formatLapMs } from './format';
+import { formatLapMs, fuelRateText, fuelText } from './format';
 import type { CarEntry, Settings, TrafficLevel } from './types';
 
 export interface QuickUpdateInput {
@@ -50,6 +50,7 @@ export interface ValidationWarning {
 export function validateRaceData(car: CarEntry, input: QuickUpdateInput, settings: Settings): ValidationWarning[] {
   const w: ValidationWarning[] = [];
   const { live, setup } = car;
+  const fu = settings.units.fuel;
   const prevLap = live.lapsCompleted + 1;
   const newCompleted = input.lapsCompleted ?? live.lapsCompleted;
   const newLap = newCompleted + 1;
@@ -76,16 +77,16 @@ export function validateRaceData(car: CarEntry, input: QuickUpdateInput, setting
   if (input.fuelL != null) {
     if (input.fuelL < 0) w.push({ code: 'FUEL_NEGATIVE', field: 'fuelL', severity: 'critical', message: 'Fuel cannot be negative.' });
     if (input.fuelL > setup.fuelCapacityL + 0.05)
-      w.push({ code: 'FUEL_OVER_CAPACITY', field: 'fuelL', severity: 'critical', message: `Fuel ${input.fuelL.toFixed(1)} L exceeds tank capacity ${setup.fuelCapacityL} L.` });
+      w.push({ code: 'FUEL_OVER_CAPACITY', field: 'fuelL', severity: 'critical', message: `Fuel ${fuelText(input.fuelL, fu)} exceeds tank capacity ${fuelText(setup.fuelCapacityL, fu)}.` });
     const diff = input.fuelL - live.fuelL;
     if (diff > 0.5)
-      w.push({ code: 'FUEL_INCREASED', field: 'fuelL', severity: 'warning', message: `Fuel increased by ${diff.toFixed(1)} L without a recorded pit stop. Was a pit stop completed?`, suggestsPit: true });
+      w.push({ code: 'FUEL_INCREASED', field: 'fuelL', severity: 'warning', message: `Fuel increased by ${fuelText(diff, fu)} without a recorded pit stop. Was a pit stop completed?`, suggestsPit: true });
     else if (lapDelta > 0) {
       const used = input.fuelUsedL ?? live.fuelL - input.fuelL;
       const perLap = used / lapDelta;
       const avg = measureFuelPerLap(car, settings).value;
       if (avg > 0 && Math.abs(perLap - avg) / avg > settings.alerts.consumptionChangePct / 100)
-        w.push({ code: 'FUEL_RATE_CHANGE', field: 'fuelL', severity: 'warning', message: `Fuel consumption changed from ${avg.toFixed(2)} L/lap to ${perLap.toFixed(2)} L/lap. Verify input.` });
+        w.push({ code: 'FUEL_RATE_CHANGE', field: 'fuelL', severity: 'warning', message: `Fuel consumption changed from ${fuelRateText(avg, fu)} to ${fuelRateText(perLap, fu)}. Verify input.` });
     }
   }
 

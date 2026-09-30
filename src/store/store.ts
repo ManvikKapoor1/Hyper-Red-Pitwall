@@ -3,6 +3,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { createCompletedSample, createDemoRace, createUpcomingSample } from '../data/samples';
 import { demoAdvanceLap } from '../engine/demo';
 import { DEFAULT_SETTINGS, makeDriver, newCar, newRace, nextVersion, versionOf } from '../engine/factory';
+import { fuelText } from '../engine/format';
 import { raceNowSec } from '../engine/live';
 import {
   applyQuickUpdate,
@@ -431,7 +432,7 @@ export const useStore = create<AppState>()(
                 ...live,
                 calls: [
                   ...live.calls,
-                  makeCall(live, live.lastLapEndSec, `PIT STOP ${live.stops.length} COMPLETE`, 'INFO', `+${input.fuelAddedL.toFixed(1)} L · ${input.changeTires ? 'tires ' + input.compound : 'no tires'} · ${drv}`, 'COMPLETED', 'event'),
+                  makeCall(live, live.lastLapEndSec, `PIT STOP ${live.stops.length} COMPLETE`, 'INFO', `+${fuelText(input.fuelAddedL, st.units.fuel)} · ${input.changeTires ? 'tires ' + input.compound : 'no tires'} · ${drv}`, 'COMPLETED', 'event'),
                   makeCall(live, live.lastLapEndSec, `STINT ${live.stintIndex + 1} STARTED`, 'INFO', `Driver ${drv}`, 'LOGGED', 'event'),
                 ],
               };

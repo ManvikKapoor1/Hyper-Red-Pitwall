@@ -2,6 +2,7 @@ import { useState } from 'react';
 import type { CallAction, RaceCall } from '../../engine/calls';
 import type { LiveProjection } from '../../engine/live';
 import type { CallPriority, CarEntry, Race } from '../../engine/types';
+import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { Field, Modal, NumInput } from '../ui';
 import { PRIORITY_LABEL, priorityColor } from './RaceStatusBadge';
@@ -26,6 +27,7 @@ export function useApplyCall(race: Race, car: CarEntry, p: LiveProjection) {
 export function RaceCallCard({ race, car, p, call, onOverride }: { race: Race; car: CarEntry; p: LiveProjection; call?: RaceCall; onOverride: () => void }) {
   const logCall = useStore((s) => s.logCall);
   const apply = useApplyCall(race, car, p);
+  const u = useUnits();
   const [showBasis, setShowBasis] = useState(false);
   if (!call) return null;
   const color = priorityColor(call.priority);
@@ -62,7 +64,7 @@ export function RaceCallCard({ race, car, p, call, onOverride }: { race: Race; c
         {showBasis && (
           <div className="call-basis">
             <div>
-              Fuel: {p.fuelRate.value.toFixed(2)} L/lap — {p.fuelRate.source} ({p.fuelRate.confidence})
+              Fuel: {u.fpl(p.fuelRate.value)} {u.fuelUnit}/lap — {p.fuelRate.source} ({p.fuelRate.confidence})
             </div>
             {car.setup.energyEnabled && (
               <div>

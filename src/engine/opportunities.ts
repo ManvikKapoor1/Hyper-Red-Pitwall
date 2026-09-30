@@ -10,6 +10,7 @@
 import { minConfidence } from './calls';
 import { compareStrategies, generateAlternatives, pitNowOption, type StrategyMetrics, type StrategyOption } from './alternatives';
 import { liveSimOptions, measureEnergyPerLap, measureFuelPerLap } from './live';
+import { fuelRateText } from './format';
 import { getCompound } from './model';
 import type { SimOptions, StrategyResult } from './simulate';
 import type { CarEntry, Confidence, Race, Settings } from './types';
@@ -132,7 +133,7 @@ export function findOpportunities(race: Race, car: CarEntry, settings: Settings)
     .sort((a, b) => Number(b.better) - Number(a.better) || b.gainLaps - a.gainLaps || b.gainSec - a.gainSec);
 
   const basis = racing
-    ? `From lap ${live.lapsCompleted + 1} · fuel ${fuelRate.value.toFixed(2)} L/lap (${fuelRate.source})${car.setup.energyEnabled ? ` · energy ${energyRate.value.toFixed(2)} %/lap` : ''}`
+    ? `From lap ${live.lapsCompleted + 1} · fuel ${fuelRateText(fuelRate.value, settings.units.fuel)} (${fuelRate.source})${car.setup.energyEnabled ? ` · energy ${energyRate.value.toFixed(2)} %/lap` : ''}`
     : 'Pre-race · entered assumptions and planned scenarios';
   return { base, list, checked: options.length - 1, basis };
 }

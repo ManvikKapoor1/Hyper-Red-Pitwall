@@ -2,6 +2,7 @@
  * Race-call generation. Produces SUGGESTED pitwall calls from the live
  * projection. Nothing is sent to the driver — the strategist decides.
  */
+import { fuelRateText, fuelText } from './format';
 import { TEMPLATE_LABEL } from './model';
 import type { LiveProjection } from './live';
 import type { CallPriority, CarEntry, Confidence, DriveMode, Race, Settings } from './types';
@@ -101,6 +102,9 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   const L = p.currentLap;
   const T = p.window.target;
   const ns = p.nextStop;
+  const fu = settings.units.fuel;
+  const fuel = (l: number) => fuelText(l, fu);
+  const rate = (l: number) => fuelRateText(l, fu);
 
   // ── pre-race / finished ─────────────────────────────────────────────────────
   if (live.phase === 'pre' || live.phase === 'grid') {
@@ -111,7 +115,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
       priority: 'INFO',
       reasons: [
         `Plan: ${p.sim.stops.length} stops · ${p.sim.totalLaps} laps projected`,
-        `Start fuel ${f1(s0?.fuelStartL ?? 0)} L · ${s0?.compound ?? ''} tires`,
+        `Start fuel ${fuel(s0?.fuelStartL ?? 0)} · ${s0?.compound ?? ''} tires`,
       ],
       confidence: 'LOW',
       category: 'info',
@@ -129,7 +133,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
     calls.push({
       key: 'PIT_SERVICE',
       text: s
-        ? `${TEMPLATE_LABEL[s.template]} · +${f1(s.fuelAddedL)} L`
+        ? `${TEMPLATE_LABEL[s.template]} · +${fuel(s.fuelAddedL)}`
         : 'PIT SERVICE',
       priority: 'ACTION',
       reasons: s
@@ -174,9 +178,9 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
           reasons: [
             `${res} short by ${f1(Math.abs(worst))} laps at the flag`,
             res === 'Fuel'
-              ? `Target ${f2(p.fuelRequiredPerLap)} L/lap (now ${f2(p.fuelRate.value)})`
+              ? `Target ${rate(p.fuelRequiredPerLap)} (now ${rate(p.fuelRate.value)})`
               : `Target ${f2(p.energyRequiredPerLap)} %/lap (now ${f2(p.energyRate.value)})`,
-            canSave ? `${res === 'Fuel' ? 'Fuel' : 'Energy'} save mode gives −${f1(avail)}% (need −${f1(need)}%)` : `Splash +${f1(amounts.fuelAddedL)} L${setup.energyEnabled ? ` · +${f1(amounts.energyAddedPct)} % energy` : ''}`,
+            canSave ? `${res === 'Fuel' ? 'Fuel' : 'Energy'} save mode gives −${f1(avail)}% (need −${f1(need)}%)` : `Splash +${fuel(amounts.fuelAddedL)}${setup.energyEnabled ? ` · +${f1(amounts.energyAddedPct)} % energy` : ''}`,
           ],
           confidence: conf,
           alternative: canSave ? splashTxt : avail > 0 ? `${res.toUpperCase()} SAVE ${f1(avail)}% (NOT ENOUGH)` : undefined,
@@ -274,12 +278,12 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
       if (canSave) {
         calls.push({
           key: limiter === 'Fuel' ? 'FUEL_SAVE' : 'ENERGY_SAVE',
-          text: limiter === 'Fuel' ? `FUEL SAVE — ${f2(p.fuelRequiredPerLap)} L/LAP` : `ENERGY SAVE — ${f2(p.energyRequiredPerLap)} %/LAP`,
+          text: limiter === 'Fuel' ? `FUEL SAVE — ${rate(p.fuelRequiredPerLap).toUpperCase()}` : `ENERGY SAVE — ${f2(p.energyRequiredPerLap)} %/LAP`,
           priority: 'ACTION',
           reasons: [
             `Target lap ${T} needs −${f1(savePct)}% ${limiter.toLowerCase()} use`,
             limiter === 'Fuel'
-              ? `Current ${f2(p.fuelRate.value)} L/lap · safe range to lap ${latest}`
+              ? `Current ${rate(p.fuelRate.value)} · safe range to lap ${latest}`
               : `Current ${f2(p.energyRate.value)} %/lap · safe range to lap ${latest}`,
             `${limiter === 'Fuel' ? 'Fuel' : 'Energy'} save mode gives −${f1(modeSave)}% from the current mode`,
           ],
@@ -307,7 +311,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         });
       }
     } else if (T <= L) {
-      const reasons = [`Target stint complete (lap ${T})`, `Fuel at pit ${f1(p.fuelAtPitL)} L · ${f1(p.fuelAtPitLaps)} laps margin`];
+      const reasons = [`Target stint complete (lap ${T})`, `Fuel at pit ${fuel(p.fuelAtPitL)} · ${f1(p.fuelAtPitLaps)} laps margin`];
       if (ns?.driverChange) reasons.push(`Driver change → ${dname(ns.toDriverId)}`);
       if (ns) reasons.push(ns.changeTires ? `Tires: ${ns.compound}` : 'No tire change');
       calls.push({
@@ -342,7 +346,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         key: 'PREPARE_PIT',
         text: `PREPARE PIT — BOX LAP ${T}`,
         priority: 'UPCOMING',
-        reasons: [`${lapsTxt(T - L)} to target`, ns ? `${TEMPLATE_LABEL[ns.template]} · +${f1(ns.fuelAddedL)} L` : ''].filter(Boolean),
+        reasons: [`${lapsTxt(T - L)} to target`, ns ? `${TEMPLATE_LABEL[ns.template]} · +${fuel(ns.fuelAddedL)}` : ''].filter(Boolean),
         confidence: conf,
         alternative: p.extendLaps > 0 ? `EXTEND ${lapsTxt(Math.min(p.extendLaps, 3))}` : undefined,
         category: 'pit',
@@ -413,7 +417,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
     if (m >= 0 && m < settings.alerts.fuelMarginCritLaps)
       calls.push({ key: 'FUEL_MARGIN_CRIT', text: `FUEL MARGIN ${f1(m)} LAPS AT PIT`, priority: 'ACTION', reasons: [`Below ${settings.alerts.fuelMarginCritLaps}-lap threshold`], confidence: conf, category: 'fuel' });
     else if (m >= 0)
-      calls.push({ key: 'FUEL_MARGIN', text: `FUEL MARGIN +${f1(m)} LAPS`, priority: 'INFO', reasons: [`${f1(p.fuelAtPitL)} L projected at lap ${T}`], confidence: conf, category: 'fuel' });
+      calls.push({ key: 'FUEL_MARGIN', text: `FUEL MARGIN +${f1(m)} LAPS`, priority: 'INFO', reasons: [`${fuel(p.fuelAtPitL)} projected at lap ${T}`], confidence: conf, category: 'fuel' });
     if (live.driveMode !== 'push' && (!setup.energyEnabled || p.energySavePct === 0) && affordable(car, p, 'push', settings.alerts.fuelMarginWarnLaps))
       calls.push({ key: 'PUSH', text: 'PUSH', priority: 'INFO', reasons: ['Push mode keeps fuel & energy margin to the stop (entered effect)'], confidence: conf, category: 'info', action: { type: 'mode', mode: 'push' } });
     else if (m >= 0)

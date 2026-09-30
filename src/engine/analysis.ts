@@ -52,6 +52,25 @@ export interface PostRaceSummary {
   finished: boolean;
 }
 
+/**
+ * Fuel and energy each recorded lap used. Where a reading was not typed the
+ * drop in the remaining amount is used instead (pit stops add back what was
+ * put in), so totals cover every lap.
+ */
+export function lapUsage(car: CarEntry): { lap: number; fuelL: number; energyPct: number }[] {
+  const { laps, stops } = car.live;
+  const addAfter = new Map(stops.map((s) => [s.lap, s]));
+  return laps.map((l, i) => {
+    const prev = laps[i - 1];
+    const stop = prev ? addAfter.get(prev.lap) : undefined;
+    const fuelBefore = prev ? prev.fuelAfterL + (stop?.fuelAddedL ?? 0) : null;
+    const energyBefore = prev ? prev.energyAfterPct + (stop?.energyAddedPct ?? 0) : null;
+    const fuelL = l.fuelUsedL ?? (fuelBefore != null ? Math.max(0, fuelBefore - l.fuelAfterL) : 0);
+    const energyPct = l.energyUsedPct ?? (energyBefore != null ? Math.max(0, energyBefore - l.energyAfterPct) : 0);
+    return { lap: l.lap, fuelL, energyPct };
+  });
+}
+
 export function actualStints(car: CarEntry): ActualStint[] {
   const out: ActualStint[] = [];
   const by = new Map<number, typeof car.live.laps>();
@@ -60,11 +79,12 @@ export function actualStints(car: CarEntry): ActualStint[] {
     arr.push(l);
     by.set(l.stint, arr);
   }
+  const usage = new Map(lapUsage(car).map((u) => [u.lap, u]));
   let prevEnd = 0;
   for (const [idx, laps] of [...by.entries()].sort((a, b) => a[0] - b[0])) {
     const green = laps.filter((l) => !l.pitIn && !l.event);
-    const fuel = laps.reduce((a, l) => a + (l.fuelUsedL ?? 0), 0);
-    const fuelN = laps.filter((l) => l.fuelUsedL != null).length;
+    const fuel = laps.reduce((a, l) => a + (usage.get(l.lap)?.fuelL ?? 0), 0);
+    const fuelN = laps.filter((l) => (usage.get(l.lap)?.fuelL ?? 0) > 0).length;
     out.push({
       index: idx,
       driverId: laps[0].driverId,
@@ -75,7 +95,7 @@ export function actualStints(car: CarEntry): ActualStint[] {
       endSec: laps[laps.length - 1].endSec,
       fuelUsedL: fuel,
       fuelPerLapL: fuelN ? fuel / fuelN : 0,
-      energyUsedPct: laps.reduce((a, l) => a + (l.energyUsedPct ?? 0), 0),
+      energyUsedPct: laps.reduce((a, l) => a + (usage.get(l.lap)?.energyPct ?? 0), 0),
       avgLapMs: green.length ? green.reduce((a, l) => a + l.lapMs, 0) / green.length : 0,
       bestLapMs: green.length ? Math.min(...green.map((l) => l.lapMs)) : 0,
       compound: laps[laps.length - 1].compound,
@@ -92,8 +112,10 @@ export function postRaceSummary(race: Race, car: CarEntry): PostRaceSummary {
   const stints = actualStints(car);
   const live = car.live;
   const laps = live.laps;
-  const fuelLaps = laps.filter((l) => l.fuelUsedL != null);
-  const fuelUsedL = fuelLaps.reduce((a, l) => a + (l.fuelUsedL ?? 0), 0);
+  const usage = lapUsage(car);
+  const fuelUsedL = usage.reduce((a, u) => a + u.fuelL, 0);
+  const energyUsedPct = usage.reduce((a, u) => a + u.energyPct, 0);
+  const fuelLaps = usage.filter((u) => u.fuelL > 0);
   const drivers: PostRaceSummary['driverStints'] = {};
   for (const s of stints) {
     const d = (drivers[s.driverId] ??= { stints: 0, laps: 0, timeSec: 0, bestLapMs: 0, avgLapMs: 0 });
@@ -134,7 +156,7 @@ export function postRaceSummary(race: Race, car: CarEntry): PostRaceSummary {
     totalStationarySec: live.stops.reduce((a, s) => a + s.stationarySec, 0),
     fuelUsedL,
     avgFuelPerLapL: fuelLaps.length ? fuelUsedL / fuelLaps.length : 0,
-    energyUsedPct: laps.reduce((a, l) => a + (l.energyUsedPct ?? 0), 0),
+    energyUsedPct,
     tireSets: 1 + live.stops.filter((s) => s.changeTires).length,
     driverStints: drivers,
     strategyChanges: Math.max(0, car.versions.length - 1),
