@@ -34,8 +34,6 @@ export interface TracePoint {
   estimated: boolean;
 }
 
-export type TraceRange = 'stint' | 'last30' | 'race';
-
 export function lapTrace(car: CarEntry, events: ScenarioEvent[] = []): TracePoint[] {
   const { setup, plan, drivers } = car;
   const dmap = new Map(drivers.map((d) => [d.id, d]));
@@ -74,11 +72,4 @@ export function lapTrace(car: CarEntry, events: ScenarioEvent[] = []): TracePoin
       estimated: !!l.estimated,
     };
   });
-}
-
-/** Slice a trace to the current stint, the last 30 laps or the whole race. */
-export function sliceTrace(trace: TracePoint[], range: TraceRange, stintIndex: number): TracePoint[] {
-  if (range === 'stint') return trace.filter((t) => t.stint === stintIndex);
-  if (range === 'last30') return trace.slice(-30);
-  return trace;
 }

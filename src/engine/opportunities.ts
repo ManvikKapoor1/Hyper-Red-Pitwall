@@ -7,6 +7,7 @@
  * calculation and the entered assumptions; nothing is guessed. The pitwall
  * still decides.
  */
+import { minConfidence } from './calls';
 import { compareStrategies, generateAlternatives, pitNowOption, type StrategyMetrics, type StrategyOption } from './alternatives';
 import { liveSimOptions, measureEnergyPerLap, measureFuelPerLap } from './live';
 import { getCompound } from './model';
@@ -39,9 +40,7 @@ export interface OpportunityScan {
   basis: string;
 }
 
-const CONF_ORDER: Confidence[] = ['LOW', 'MEDIUM', 'HIGH'];
-const lower = (c: Confidence): Confidence => CONF_ORDER[Math.max(0, CONF_ORDER.indexOf(c) - 1)];
-const minConf = (...cs: Confidence[]): Confidence => CONF_ORDER[Math.min(...cs.map((c) => CONF_ORDER.indexOf(c)))];
+const lower = (c: Confidence): Confidence => (c === 'HIGH' ? 'MEDIUM' : 'LOW');
 
 /** Human-readable differences between the current projection and an option. */
 function describeChanges(base: StrategyResult, opt: StrategyResult, option: StrategyOption, fromStint: number): string[] {
@@ -105,7 +104,7 @@ export function findOpportunities(race: Race, car: CarEntry, settings: Settings)
 
   const fuelRate = measureFuelPerLap(car, settings);
   const energyRate = measureEnergyPerLap(car, settings);
-  const dataConf = racing ? minConf(fuelRate.confidence, car.setup.energyEnabled ? energyRate.confidence : 'HIGH') : 'MEDIUM';
+  const dataConf = racing ? minConfidence(fuelRate.confidence, car.setup.energyEnabled ? energyRate.confidence : 'HIGH') : 'MEDIUM';
   const warnLaps = settings.alerts.fuelMarginCritLaps;
 
   const list: Opportunity[] = metrics

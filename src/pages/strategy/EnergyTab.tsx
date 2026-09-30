@@ -6,7 +6,9 @@ import { energySensitivity } from '../../engine/whatif';
 import { LineChart } from '../../components/charts/LineChart';
 import { Panel, Stat } from '../../components/ui';
 import { useUnits } from '../../lib/units';
-import { marginClass, MODE_LABEL, type TabProps } from './shared';
+import { marginClass } from '../../lib/margins';
+import { MODE_LABEL } from '../../lib/labels';
+import type { TabProps } from './shared';
 import type { DriveMode } from '../../engine/types';
 
 const ENERGY_PCTS = [-3, 0, 2, 5, 8];

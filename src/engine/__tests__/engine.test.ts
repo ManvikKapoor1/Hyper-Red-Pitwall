@@ -8,7 +8,7 @@ import { adoptMeasured, assumptionRows, driverStats } from '../assumptions';
 import { calculateStrategy } from '../simulate';
 import { findOpportunities } from '../opportunities';
 import { withTirePattern } from '../planner';
-import { lapTrace, sliceTrace } from '../trace';
+import { lapTrace } from '../trace';
 import { fuelSensitivity, tireOptions } from '../whatif';
 import { validateRaceData } from '../validate';
 import { formatClock, formatLapMs, parseLapTime } from '../format';
@@ -78,10 +78,6 @@ describe('lap trace', () => {
   test('pit and scenario laps are not green', () => {
     const pit = trace.find((t) => t.pitIn);
     expect(pit?.green).toBe(false);
-  });
-  test('slices by stint and window', () => {
-    expect(sliceTrace(trace, 'last30', car.live.stintIndex).length).toBe(Math.min(30, trace.length));
-    expect(sliceTrace(trace, 'stint', car.live.stintIndex).every((t) => t.stint === car.live.stintIndex)).toBe(true);
   });
 });
 

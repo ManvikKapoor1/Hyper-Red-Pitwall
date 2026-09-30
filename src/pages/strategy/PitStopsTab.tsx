@@ -2,11 +2,13 @@ import { Link } from 'react-router-dom';
 import { formatClock } from '../../engine/format';
 import { calculatePitLoss, TEMPLATE_LABEL } from '../../engine/model';
 import { applyTemplate } from '../../engine/planner';
-import type { PitTemplate, ServiceConcurrency } from '../../engine/types';
+import type { PitTemplate } from '../../engine/types';
+import { CONCURRENCY } from '../../lib/labels';
 import { Panel } from '../../components/ui';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
-import { DriverChip, type TabProps } from './shared';
+import { DriverChip } from '../../components/race/DriverChip';
+import type { TabProps } from './shared';
 
 const TEMPLATES: { t: PitTemplate; fuel: boolean; tires: boolean; driver: boolean; extra?: number; note: string }[] = [
   { t: 'FUEL_ONLY', fuel: true, tires: false, driver: false, note: 'Refuel, same driver, same tires' },
@@ -18,11 +20,6 @@ const TEMPLATES: { t: PitTemplate; fuel: boolean; tires: boolean; driver: boolea
   { t: 'CUSTOM', fuel: true, tires: false, driver: false, note: 'Any combination, set per stop' },
 ];
 
-const CONCURRENCY: Record<ServiceConcurrency, string> = {
-  sequential: 'Sequential — fuel, then tires, then driver',
-  parallel: 'Parallel — longest service only',
-  fuelDriverThenTires: 'Fuel ∥ driver, then tires',
-};
 
 export function PitStopsTab({ race, car, res }: TabProps) {
   const u = useUnits();
@@ -113,7 +110,7 @@ export function PitStopsTab({ race, car, res }: TabProps) {
             <span className="k">Driver change</span>
             <span className="v">{u.n(setup.driverChangeSec, 1)} s</span>
             <span className="k">Service order</span>
-            <span className="v l">{CONCURRENCY[setup.concurrency]}</span>
+            <span className="v l">{CONCURRENCY.find((c) => c.value === setup.concurrency)?.title}</span>
           </div>
         </Panel>
         <Panel title="Stop templates" meta={<span className="sublabel">example: {u.fuelU(exampleFuel, 0)} refuel</span>} bodyClass="flush">

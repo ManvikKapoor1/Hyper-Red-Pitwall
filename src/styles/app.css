@@ -1211,37 +1211,8 @@ body.focus-mode .sidebar {
   stroke-width: 1.5;
   stroke-dasharray: 5 4;
 }
-.lc-dot {
-  stroke: var(--panel);
-  stroke-width: 2;
-}
-.lc-mk {
-  stroke: var(--panel);
-  stroke-width: 2;
-}
-.lc-mk.pit,
-.lc-tip-r .mk.pit,
-.lc-lg .mk.pit {
-  fill: var(--blue);
-  background: var(--blue);
-}
-.lc-mk.event,
-.lc-tip-r .mk.event,
-.lc-lg .mk.event {
-  fill: var(--amber);
-  background: var(--amber);
-}
-.lc-mk.dim,
-.lc-tip-r .mk.dim,
-.lc-lg .mk.dim {
-  fill: var(--dim);
-  background: var(--dim);
-}
-.lc-band.event {
+.lc-band {
   fill: var(--amber-bg);
-}
-.lc-band.window {
-  fill: var(--green-bg);
 }
 .lc-cross line {
   stroke: var(--text-2);
@@ -1292,12 +1263,6 @@ body.focus-mode .sidebar {
 .lc-tip-r span {
   color: var(--muted);
 }
-.lc-tip-d {
-  margin-top: 3px;
-  white-space: nowrap;
-  color: var(--text-2);
-  font-family: var(--font-mono);
-}
 .lc-tip-r i,
 .lc-lg i {
   width: 12px;
@@ -1308,13 +1273,6 @@ body.focus-mode .sidebar {
 .lc-tip-r i.dash,
 .lc-lg i.dash {
   border-top-style: dashed;
-}
-.lc-tip-r i.mk,
-.lc-lg i.mk {
-  width: 8px;
-  height: 8px;
-  border: 0;
-  border-radius: 50%;
 }
 .lc-legend {
   display: inline-flex;

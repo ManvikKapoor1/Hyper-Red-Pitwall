@@ -4,7 +4,8 @@ import { formatDelta, formatLapMs } from '../../engine/format';
 import { blocksFromActual, blocksFromResult, StrategyTimeline } from '../../components/race/StrategyTimeline';
 import { Panel, Seg } from '../../components/ui';
 import { useUnits } from '../../lib/units';
-import { DriverChip, type TabProps } from './shared';
+import { DriverChip } from '../../components/race/DriverChip';
+import type { TabProps } from './shared';
 
 export function TimelineTab({ race, car, res }: TabProps) {
   const u = useUnits();

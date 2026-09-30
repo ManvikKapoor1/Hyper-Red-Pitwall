@@ -1,10 +1,9 @@
 import { useState, type ReactNode } from 'react';
 import { Link, NavLink, useParams } from 'react-router-dom';
+import { RaceContextBar, RaceNotFound } from '../../components/race/RaceContextBar';
 import { formatClock } from '../../engine/format';
 import type { CarEntry, Race } from '../../engine/types';
-import { CarSelector } from '../../components/race/RaceHeader';
-import { RaceStatusBadge } from '../../components/race/RaceStatusBadge';
-import { Badge, Field, Modal, SampleBadge, Stat } from '../../components/ui';
+import { Badge, Field, Modal, Stat } from '../../components/ui';
 import { activeCar, usePlanResult, useRaceFromRoute } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
@@ -13,7 +12,8 @@ import { BuilderTab } from './BuilderTab';
 import { EnergyTab } from './EnergyTab';
 import { FuelTab } from './FuelTab';
 import { PitStopsTab } from './PitStopsTab';
-import { marginClass, type TabProps } from './shared';
+import { marginClass } from '../../lib/margins';
+import type { TabProps } from './shared';
 import { SimulationTab } from './SimulationTab';
 import { StintsTab } from './StintsTab';
 import { TimelineTab } from './TimelineTab';
@@ -35,7 +35,7 @@ const TABS: { key: string; label: string; el: (p: TabProps) => ReactNode }[] = [
 
 export function StrategyPage() {
   const race = useRaceFromRoute();
-  if (!race) return <div className="empty">Race not found. <Link to="/app">Back to dashboard</Link></div>;
+  if (!race) return <RaceNotFound />;
   return <Strategy race={race} car={activeCar(race)} />;
 }
 
@@ -47,31 +47,31 @@ function Strategy({ race, car }: { race: Race; car: CarEntry }) {
   const saveToLibrary = useStore((s) => s.saveToLibrary);
   return (
     <>
-      <div className="ctx-bar">
-        <span className="title ellipsis">{race.params.name}</span>
-        <CarSelector race={race} />
+      <RaceContextBar
+        race={race}
+        actions={
+          <>
+            <button className="btn sm ghost" onClick={() => saveToLibrary(race.id, car.id, `${car.plan.name} — ${race.params.track}`)} title="Keep a copy of this plan in the strategy library">
+              Save to library
+            </button>
+            <button className="btn sm primary" onClick={() => setSaving(true)}>
+              Save version
+            </button>
+            <Link className="btn sm" to={`/app/race/${race.id}/live`}>
+              Live race
+            </Link>
+          </>
+        }
+      >
         <span className="sublabel">
           #{car.number} {car.setup.car} · plan “{car.plan.name}”
         </span>
-        <RaceStatusBadge status={race.status} size="sm" />
-        {race.sample && <SampleBadge />}
         {car.planDirty && (
           <Badge size="sm" color="amber" title="The plan has edits that are not saved as a version yet">
             Unsaved changes
           </Badge>
         )}
-        <div className="row gap-4" style={{ marginLeft: 'auto' }}>
-          <button className="btn sm ghost" onClick={() => saveToLibrary(race.id, car.id, `${car.plan.name} — ${race.params.track}`)} title="Keep a copy of this plan in the strategy library">
-            Save to library
-          </button>
-          <button className="btn sm primary" onClick={() => setSaving(true)}>
-            Save version
-          </button>
-          <Link className="btn sm" to={`/app/race/${race.id}/live`}>
-            Live race
-          </Link>
-        </div>
-      </div>
+      </RaceContextBar>
       <div className="page full">
         <PlanSummary car={car} res={res} />
         <nav className="tabs" aria-label="Strategy sections">

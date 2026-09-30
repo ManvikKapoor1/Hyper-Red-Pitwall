@@ -5,7 +5,8 @@ import { fuelSensitivity } from '../../engine/whatif';
 import { LineChart } from '../../components/charts/LineChart';
 import { Panel, Stat } from '../../components/ui';
 import { useUnits } from '../../lib/units';
-import { marginClass, type TabProps } from './shared';
+import { marginClass } from '../../lib/margins';
+import type { TabProps } from './shared';
 
 const FUEL_PCTS = [-3, 0, 2, 5, 8];
 

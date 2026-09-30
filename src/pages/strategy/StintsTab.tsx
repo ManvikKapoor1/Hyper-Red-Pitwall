@@ -4,7 +4,10 @@ import type { DriveMode } from '../../engine/types';
 import { NumInput, Panel } from '../../components/ui';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
-import { DriverChip, flagClass, limiterText, marginClass, MODE_OPTIONS, type TabProps } from './shared';
+import { DriverChip } from '../../components/race/DriverChip';
+import { marginClass } from '../../lib/margins';
+import { DRIVE_MODES } from '../../lib/labels';
+import { flagClass, limiterText, type TabProps } from './shared';
 
 export function StintsTab({ race, car, res }: TabProps) {
   const u = useUnits();
@@ -59,7 +62,7 @@ export function StintsTab({ race, car, res }: TabProps) {
                   <td className="n">{last ? <span className="dim">FLAG</span> : <NumInput size="sm" value={st.targetLaps} decimals={0} min={1} onChange={(v) => set(i, { targetLaps: Math.round(v) })} />}</td>
                   <td>
                     <select className="select sm" value={st.mode} onChange={(e) => set(i, { mode: e.target.value as DriveMode })} aria-label={`Stint ${i + 1} mode`}>
-                      {MODE_OPTIONS.map((m) => (
+                      {DRIVE_MODES.map((m) => (
                         <option key={m.value} value={m.value}>
                           {m.label}
                         </option>

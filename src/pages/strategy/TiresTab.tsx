@@ -40,7 +40,7 @@ export function TiresTab({ race, car, res }: TabProps) {
                   { x: c.targetLife, label: 'TARGET', anchor: 'end' },
                   { x: c.maxLife, label: 'MAX' },
                 ]}
-                bands={[{ x0: c.maxLife, x1: maxAge, kind: 'event' }]}
+                bands={[{ x0: c.maxLife, x1: maxAge }]}
                 xDomain={[0, maxAge]}
                 yDomain={[0, yMax]}
                 xInteger

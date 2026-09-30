@@ -5,7 +5,8 @@ import { blocksFromResult, StrategyTimeline } from '../../components/race/Strate
 import { Badge, Panel } from '../../components/ui';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
-import { IssueList, marginClass, type TabProps } from './shared';
+import { marginClass } from '../../lib/margins';
+import { IssueList, type TabProps } from './shared';
 
 const TAG_COLOR: Partial<Record<StrategyTag, 'blue' | 'amber'>> = {
   CURRENT: 'blue',

@@ -1,30 +1,24 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
+import { RaceContextBar, RaceNotFound } from '../components/race/RaceContextBar';
+import { CarSelector } from '../components/race/RaceHeader';
 import { DRIVER_COLORS } from '../engine/factory';
 import { netEnergyPerLap } from '../engine/model';
 import { planUsesCompound } from '../engine/planner';
 import { calculateRequiredStops, calculateStintLength, estimateRaceLaps } from '../engine/simulate';
-import type { CarEntry, CarSetup, CompoundSpec, DriveMode, Race, RaceParams, ServiceConcurrency } from '../engine/types';
-import { CarSelector } from '../components/race/RaceHeader';
-import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
+import type { CarEntry, CarSetup, CompoundSpec, DriveMode, Race, RaceParams } from '../engine/types';
 import { IconPlus, IconTrash } from '../components/icons';
-import { ClockInput, Field, LapTimeInput, NumInput, Panel, SampleBadge, Seg, Stat } from '../components/ui';
+import { ClockInput, Field, LapTimeInput, NumInput, Panel, Seg, Stat } from '../components/ui';
 import { activeCar, useRaceFromRoute } from '../lib/hooks';
 import { useUnits } from '../lib/units';
+import { CONCURRENCY, DRIVE_MODES } from '../lib/labels';
 import { useStore } from '../store/store';
 
 export function RaceSetupPage() {
   const race = useRaceFromRoute();
-  if (!race) return <div className="empty">Race not found. <Link to="/app">Back to dashboard</Link></div>;
+  if (!race) return <RaceNotFound />;
   return <RaceSetup race={race} car={activeCar(race)} />;
 }
-
-const MODES: { key: DriveMode; label: string }[] = [
-  { key: 'normal', label: 'Normal' },
-  { key: 'fuelSave', label: 'Fuel save' },
-  { key: 'energySave', label: 'Energy save' },
-  { key: 'push', label: 'Push' },
-];
 
 function RaceSetup({ race, car }: { race: Race; car: CarEntry }) {
   const addCar = useStore((s) => s.addCar);
@@ -32,17 +26,17 @@ function RaceSetup({ race, car }: { race: Race; car: CarEntry }) {
   const updateCarMeta = useStore((s) => s.updateCarMeta);
   return (
     <>
-      <div className="ctx-bar">
-        <span className="title ellipsis">{race.params.name}</span>
-        <RaceStatusBadge status={race.status} size="sm" />
-        {race.sample && <SampleBadge />}
-        <span className="sublabel">Every number here is your own input — STINT does not assume LMU values.</span>
-        <div className="row gap-4" style={{ marginLeft: 'auto' }}>
+      <RaceContextBar
+        race={race}
+        cars={false}
+        actions={
           <Link className="btn sm primary" to={`/app/race/${race.id}/strategy`}>
             Strategy →
           </Link>
-        </div>
-      </div>
+        }
+      >
+        <span className="sublabel">Every number here is your own input — STINT does not assume LMU values.</span>
+      </RaceContextBar>
       <div className="page full">
         <div className="setup-grid">
           <RaceSection race={race} />
@@ -217,12 +211,6 @@ function CarSection({ race, car }: { race: Race; car: CarEntry }) {
   );
 }
 
-const CONC: { value: ServiceConcurrency; label: string; title: string }[] = [
-  { value: 'sequential', label: 'Sequential', title: 'Fuel, then tires, then driver' },
-  { value: 'fuelDriverThenTires', label: 'Fuel ∥ driver', title: 'Fuel and driver change together, then tires' },
-  { value: 'parallel', label: 'Parallel', title: 'All service at once — the longest counts' },
-];
-
 function PitSection({ race, car }: { race: Race; car: CarEntry }) {
   const u = useUnits();
   const set = useSetup(race, car);
@@ -246,7 +234,7 @@ function PitSection({ race, car }: { race: Race; car: CarEntry }) {
           <NumInput value={s.driverChangeSec} decimals={1} min={0} onChange={(v) => set({ driverChangeSec: v })} />
         </Field>
         <Field group label="Service order" className="span-2">
-          <Seg options={CONC} value={s.concurrency} onChange={(v) => set({ concurrency: v })} />
+          <Seg options={CONCURRENCY} value={s.concurrency} onChange={(v) => set({ concurrency: v })} />
         </Field>
       </div>
     </Panel>
@@ -316,12 +304,12 @@ function MarginsSection({ race, car }: { race: Race; car: CarEntry }) {
           </tr>
         </thead>
         <tbody>
-          {MODES.map((m) => (
-            <tr key={m.key}>
+          {DRIVE_MODES.map((m) => (
+            <tr key={m.value}>
               <td>{m.label}</td>
-              <td className="n">{m.key === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.key].fuelPct} decimals={1} onChange={(v) => mode(m.key, { fuelPct: v })} />}</td>
-              <td className="n">{m.key === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.key].energyPct} decimals={1} onChange={(v) => mode(m.key, { energyPct: v })} />}</td>
-              <td className="n">{m.key === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.key].lapSec} decimals={2} step={0.05} onChange={(v) => mode(m.key, { lapSec: v })} />}</td>
+              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].fuelPct} decimals={1} onChange={(v) => mode(m.value, { fuelPct: v })} />}</td>
+              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].energyPct} decimals={1} onChange={(v) => mode(m.value, { energyPct: v })} />}</td>
+              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].lapSec} decimals={2} step={0.05} onChange={(v) => mode(m.value, { lapSec: v })} />}</td>
             </tr>
           ))}
         </tbody>

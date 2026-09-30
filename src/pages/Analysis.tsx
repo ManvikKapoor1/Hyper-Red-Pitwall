@@ -1,26 +1,19 @@
 import { useMemo } from 'react';
-import { Link } from 'react-router-dom';
+import { RaceContextBar, RaceNotFound } from '../components/race/RaceContextBar';
 import { postRaceSummary } from '../engine/analysis';
 import { formatClock, formatDelta, formatLapMs } from '../engine/format';
 import { lapTrace } from '../engine/trace';
 import type { CarEntry, Race } from '../engine/types';
 import { LineChart, ChartLegend } from '../components/charts/LineChart';
-import { CarSelector } from '../components/race/RaceHeader';
-import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
 import { blocksFromActual, blocksFromResult, StrategyTimeline } from '../components/race/StrategyTimeline';
-import { Panel, SampleBadge, Stat } from '../components/ui';
+import { Panel, Stat } from '../components/ui';
 import { activeCar, useRaceFromRoute } from '../lib/hooks';
 import { useUnits } from '../lib/units';
-import { DriverChip } from './strategy/shared';
+import { DriverChip } from '../components/race/DriverChip';
 
 export function AnalysisPage() {
   const race = useRaceFromRoute();
-  if (!race)
-    return (
-      <div className="empty">
-        Race not found. <Link to="/app">Back to dashboard</Link>
-      </div>
-    );
+  if (!race) return <RaceNotFound />;
   return <Analysis race={race} car={activeCar(race)} />;
 }
 
@@ -37,17 +30,13 @@ function Analysis({ race, car }: { race: Race; car: CarEntry }) {
   const vlines = sum.stints.slice(1).map((s) => ({ x: s.startLap - 0.5, label: `S${s.index + 1}` }));
   const lastLap = car.live.laps[car.live.laps.length - 1]?.lap ?? 0;
   const lapAt = (sec: number) => car.live.laps.find((l) => l.endSec >= sec)?.lap ?? lastLap;
-  const bands = race.events.map((e) => ({ x0: lapAt(e.startSec) - 0.5, x1: lapAt(e.endedSec ?? e.startSec + e.durationSec) + 0.5, kind: 'event' as const }));
+  const bands = race.events.map((e) => ({ x0: lapAt(e.startSec) - 0.5, x1: lapAt(e.endedSec ?? e.startSec + e.durationSec) + 0.5 }));
   const hasData = car.live.laps.length > 0;
   return (
     <>
-      <div className="ctx-bar">
-        <span className="title ellipsis">{race.params.name}</span>
-        <CarSelector race={race} />
-        <RaceStatusBadge status={race.status} size="sm" />
-        {race.sample && <SampleBadge />}
+      <RaceContextBar race={race}>
         <span className="sublabel">Planned = strategy v{sum.plannedVersion} · actual = recorded laps and stops</span>
-      </div>
+      </RaceContextBar>
       <div className="page full">
         {!sum.finished && hasData && <div className="notice amber mb-8">Race not finished — analysis covers the {sum.lapsCompleted} laps recorded so far.</div>}
         {!hasData ? (

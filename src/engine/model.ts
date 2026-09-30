@@ -204,6 +204,8 @@ export const TEMPLATE_LABEL: Record<PitTemplate, string> = {
   CUSTOM: 'CUSTOM',
 };
 
+export const PIT_TEMPLATES = Object.keys(TEMPLATE_LABEL) as PitTemplate[];
+
 export function describeStopReason(tpl: PitTemplate, cfgReason: string, driverChange: boolean, tires: boolean): string {
   if (cfgReason) return cfgReason;
   const parts: string[] = [];

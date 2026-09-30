@@ -1,22 +1,20 @@
 import { useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { RaceContextBar, RaceNotFound } from '../components/race/RaceContextBar';
 import { assumptionRows, driverStats, type AssumptionKey } from '../engine/assumptions';
 import { formatClock, formatDelta } from '../engine/format';
 import { uid } from '../engine/planner';
 import type { CarEntry, Race } from '../engine/types';
-import { CarSelector } from '../components/race/RaceHeader';
-import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
 import { IconPlus, IconTrash } from '../components/icons';
-import { ConfidenceBadge, LapTimeInput, NumInput, Panel, SampleBadge } from '../components/ui';
+import { ConfidenceBadge, LapTimeInput, NumInput, Panel } from '../components/ui';
 import { activeCar, useRaceFromRoute } from '../lib/hooks';
 import { useUnits, type Units } from '../lib/units';
 import { downloadJSON } from '../store/persistence';
 import { useStore } from '../store/store';
-import { DriverChip } from './strategy/shared';
+import { DriverChip } from '../components/race/DriverChip';
 
 export function DataPage() {
   const race = useRaceFromRoute();
-  if (!race) return <div className="empty">Race not found. <Link to="/app">Back to dashboard</Link></div>;
+  if (!race) return <RaceNotFound />;
   return <Data race={race} car={activeCar(race)} />;
 }
 
@@ -38,13 +36,11 @@ function fmtFor(u: Units, key: AssumptionKey): (v: number) => string {
 function Data({ race, car }: { race: Race; car: CarEntry }) {
   return (
     <>
-      <div className="ctx-bar">
-        <span className="title ellipsis">{race.params.name}</span>
-        <CarSelector race={race} />
-        <RaceStatusBadge status={race.status} size="sm" />
-        {race.sample && <SampleBadge />}
-        <span className="sublabel">{car.live.laps.length} laps · {car.live.stops.length} stops recorded for #{car.number}</span>
-      </div>
+      <RaceContextBar race={race}>
+        <span className="sublabel">
+          {car.live.laps.length} laps · {car.live.stops.length} stops recorded for #{car.number}
+        </span>
+      </RaceContextBar>
       <div className="page full">
         <div className="data-grid">
           <div className="col gap-8" style={{ minWidth: 0 }}>

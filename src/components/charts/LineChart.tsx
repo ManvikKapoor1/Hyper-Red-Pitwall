@@ -17,25 +17,16 @@ export interface ChartSeries {
   color: string; // CSS colour (tokens: var(--text-2), var(--violet) …)
   dashed?: boolean; // assumptions / projections
   step?: boolean;
-  dots?: boolean;
 }
 
-export interface ChartMarker {
-  x: number;
-  y: number;
-  kind: 'pit' | 'event' | 'dim';
-  label: string;
-}
-
+/** Shaded x-range, e.g. a safety car or a tire's beyond-max-life zone. */
 export interface ChartBand {
   x0: number;
   x1: number;
-  kind: 'event' | 'window';
 }
 
 export interface LineChartProps {
   series: ChartSeries[];
-  markers?: ChartMarker[];
   bands?: ChartBand[];
   vlines?: { x: number; label?: string; anchor?: 'start' | 'end' }[];
   hlines?: { y: number; label?: string; color?: string }[];
@@ -50,19 +41,17 @@ export interface LineChartProps {
   xInteger?: boolean;
   xFormat?: (v: number) => string;
   tipTitle?: (x: number) => ReactNode;
-  tipExtra?: (x: number) => ReactNode;
   height?: number;
   ariaLabel: string;
-  empty?: ReactNode;
 }
 
 const PAD = { r: 8, t: 8, b: 18 };
 
-export function stepDecimals(step: number): number {
+function stepDecimals(step: number): number {
   return step > 0 ? Math.max(0, Math.ceil(-Math.log10(step) - 1e-9)) : 0;
 }
 
-export function niceTicks(min: number, max: number, count = 4): number[] {
+function niceTicks(min: number, max: number, count = 4): number[] {
   if (!isFinite(min) || !isFinite(max)) return [];
   const span = max - min || Math.abs(max) || 1;
   const raw = span / count;
@@ -91,7 +80,7 @@ function useSize<T extends HTMLElement>() {
 }
 
 export function LineChart(props: LineChartProps) {
-  const { series, markers = [], bands = [], vlines = [], hlines = [], yFormat, xFormat = (v) => String(v), ariaLabel } = props;
+  const { series, bands = [], vlines = [], hlines = [], yFormat, xFormat = (v) => String(v), ariaLabel } = props;
   const [ref, size] = useSize<HTMLDivElement>();
   const [hx, setHx] = useState<number | null>(null);
   const w = size.w;
@@ -100,9 +89,8 @@ export function LineChart(props: LineChartProps) {
   const xs = useMemo(() => {
     const set = new Set<number>();
     for (const s of series) for (const p of s.points) if (p.y != null) set.add(p.x);
-    for (const m of markers) set.add(m.x);
     return [...set].sort((a, b) => a - b);
-  }, [series, markers]);
+  }, [series]);
 
   const [x0, x1] = props.xDomain ?? [xs[0] ?? 0, xs[xs.length - 1] ?? 1];
   const [y0, y1] = useMemo(() => {
@@ -175,16 +163,6 @@ export function LineChart(props: LineChartProps) {
           </div>
         );
       })}
-      {markers
-        .filter((m) => m.x === hx)
-        .map((m, i) => (
-          <div key={i} className="lc-tip-r">
-            <i className={`mk ${m.kind}`} />
-            <b>{yFormat(m.y)}</b>
-            <span>{m.label}</span>
-          </div>
-        ))}
-      {props.tipExtra?.(hx)}
     </div>
   );
 
@@ -212,7 +190,7 @@ export function LineChart(props: LineChartProps) {
       {w > 0 && h > 0 && (
         <svg width={w} height={h} className="lc-svg">
           {bands.map((b, i) => (
-            <rect key={i} className={`lc-band ${b.kind}`} x={sx(b.x0)} y={PAD.t} width={Math.max(1, sx(b.x1) - sx(b.x0))} height={ih} />
+            <rect key={i} className="lc-band" x={sx(b.x0)} y={PAD.t} width={Math.max(1, sx(b.x1) - sx(b.x0))} height={ih} />
           ))}
           {yTicks.map((t) => (
             <g key={t}>
@@ -249,16 +227,7 @@ export function LineChart(props: LineChartProps) {
             </g>
           ))}
           {series.map((s) => (
-            <g key={s.id}>
-              <path d={path(s)} className={`lc-line ${s.dashed ? 'dash' : ''}`} style={{ stroke: s.color }} />
-              {s.dots &&
-                s.points.map((p) =>
-                  p.y == null || p.x < x0 || p.x > x1 ? null : <circle key={p.x} className="lc-dot" cx={sx(p.x)} cy={sy(p.y)} r={3} style={{ fill: s.color }} />,
-                )}
-            </g>
-          ))}
-          {markers.map((m, i) => (
-            <circle key={i} className={`lc-mk ${m.kind}`} cx={sx(m.x)} cy={sy(m.y)} r={4} />
+            <path key={s.id} d={path(s)} className={`lc-line ${s.dashed ? 'dash' : ''}`} style={{ stroke: s.color }} />
           ))}
           {hx != null && (
             <g className="lc-cross">
@@ -271,19 +240,19 @@ export function LineChart(props: LineChartProps) {
           )}
         </svg>
       )}
-      {xs.length === 0 && <div className="lc-empty">{props.empty ?? 'No data yet'}</div>}
+      {xs.length === 0 && <div className="lc-empty">No data yet</div>}
       {tip}
     </div>
   );
 }
 
-/** Legend row: line keys, dashed for assumptions, dots for markers. */
-export function ChartLegend({ items }: { items: { label: string; color?: string; dashed?: boolean; marker?: ChartMarker['kind'] }[] }) {
+/** Legend row: line keys, dashed for assumptions. */
+export function ChartLegend({ items }: { items: { label: string; color: string; dashed?: boolean }[] }) {
   return (
     <span className="lc-legend">
       {items.map((it) => (
         <span key={it.label} className="lc-lg">
-          {it.marker ? <i className={`mk ${it.marker}`} /> : <i className={it.dashed ? 'dash' : ''} style={{ borderColor: it.color }} />}
+          <i className={it.dashed ? 'dash' : ''} style={{ borderColor: it.color }} />
           {it.label}
         </span>
       ))}

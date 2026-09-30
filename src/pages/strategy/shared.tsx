@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import type { SimIssue, SimStint, StrategyResult } from '../../engine/simulate';
-import type { CarEntry, DriveMode, Race, RefillAmount } from '../../engine/types';
+import type { CarEntry, Race, RefillAmount } from '../../engine/types';
 import { NumInput } from '../../components/ui';
 
 export interface TabProps {
@@ -9,30 +9,9 @@ export interface TabProps {
   res: StrategyResult;
 }
 
-export const MODE_OPTIONS: { value: DriveMode; label: string }[] = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'fuelSave', label: 'Fuel save' },
-  { value: 'energySave', label: 'Energy save' },
-  { value: 'push', label: 'Push' },
-];
-
-export const MODE_LABEL: Record<DriveMode, string> = { normal: 'Normal', fuelSave: 'Fuel save', energySave: 'Energy save', push: 'Push' };
-
-export { marginClass } from '../../lib/margins';
 
 export function flagClass(flag?: string): string {
   return flag === 'LATE' ? 'c-red' : flag === 'EARLY' ? 'c-amber' : '';
-}
-
-export function DriverChip({ car, id, name = false }: { car: CarEntry; id: string; name?: boolean }) {
-  const d = car.drivers.find((x) => x.id === id);
-  return (
-    <span className="drv-chip" title={d?.name}>
-      <i style={{ background: d?.color ?? 'var(--line-3)' }} />
-      <b>{d?.code ?? '—'}</b>
-      {name && <span className="ellipsis">{d?.name ?? 'Unassigned'}</span>}
-    </span>
-  );
 }
 
 export function IssueList({ issues, empty = 'No issues — plan covers the race within entered limits.' }: { issues: SimIssue[]; empty?: ReactNode }) {

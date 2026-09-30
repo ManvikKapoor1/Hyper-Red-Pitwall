@@ -32,7 +32,7 @@ export interface AlertItem {
 
 const PRIORITY_ORDER: Record<CallPriority, number> = { CRITICAL: 0, ACTION: 1, UPCOMING: 2, INFO: 3 };
 
-function minConfidence(...cs: Confidence[]): Confidence {
+export function minConfidence(...cs: Confidence[]): Confidence {
   if (cs.includes('LOW')) return 'LOW';
   if (cs.includes('MEDIUM')) return 'MEDIUM';
   return 'HIGH';

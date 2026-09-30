@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { formatClock, formatLapMs } from '../../engine/format';
-import { TEMPLATE_LABEL } from '../../engine/model';
+import { PIT_TEMPLATES, TEMPLATE_LABEL } from '../../engine/model';
 import {
   addStint,
   applyTemplate,
@@ -19,9 +19,10 @@ import { IconDown, IconUp, IconCopy, IconPlus, IconTrash } from '../../component
 import { Field, LapTimeInput, NumInput, Panel, Seg } from '../../components/ui';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
-import { DriverChip, flagClass, IssueList, marginClass, MODE_LABEL, MODE_OPTIONS, RefillInput, type TabProps } from './shared';
-
-const TEMPLATES: PitTemplate[] = ['FUEL_ONLY', 'FUEL_TIRES', 'FUEL_DRIVER', 'FUEL_TIRES_DRIVER', 'DRIVER_ONLY', 'EMERGENCY', 'CUSTOM'];
+import { DriverChip } from '../../components/race/DriverChip';
+import { marginClass } from '../../lib/margins';
+import { DRIVE_MODES, MODE_LABEL } from '../../lib/labels';
+import { flagClass, IssueList, RefillInput, type TabProps } from './shared';
 
 export function BuilderTab({ race, car, res }: TabProps) {
   const setPlan = useStore((s) => s.setPlan);
@@ -185,7 +186,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
           </Field>
           <Field label="Drive mode" hint="Effects are the user-defined values in Race Setup">
             <select className="select" value={st.mode} onChange={(e) => set({ mode: e.target.value as DriveMode })}>
-              {MODE_OPTIONS.map((m) => (
+              {DRIVE_MODES.map((m) => (
                 <option key={m.value} value={m.value}>
                   {m.label}
                 </option>
@@ -216,7 +217,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
           <div className="grid-3">
             <Field label="Template">
               <select className="select" value={st.stop.template} onChange={(e) => edit(applyTemplate(plan, index, e.target.value as PitTemplate, car.drivers))}>
-                {TEMPLATES.map((t) => (
+                {PIT_TEMPLATES.map((t) => (
                   <option key={t} value={t}>
                     {TEMPLATE_LABEL[t]}
                   </option>
@@ -408,7 +409,7 @@ function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => vo
           <Seg options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))} value={block} onChange={setBlock} />
         </Field>
         <Field group label="Mode" className="span-2">
-          <Seg options={MODE_OPTIONS} value={mode} onChange={setMode} />
+          <Seg options={DRIVE_MODES} value={mode} onChange={setMode} />
         </Field>
         <Field group label="Driver order" className="span-2">
           <div className="col gap-4">

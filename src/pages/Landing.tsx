@@ -1,12 +1,10 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { generateRaceCalls } from '../engine/calls';
-import { projectLive } from '../engine/live';
 import type { Race } from '../engine/types';
 import { PriorityBadge } from '../components/race/RaceStatusBadge';
 import { blocksFromLive, StrategyTimeline } from '../components/race/StrategyTimeline';
 import { Logo, SampleBadge } from '../components/ui';
-import { activeCar } from '../lib/hooks';
+import { activeCar, useLive } from '../lib/hooks';
 import { useUnits } from '../lib/units';
 import { useStore } from '../store/store';
 
@@ -114,12 +112,9 @@ export function LandingPage() {
 /** Real engine output on the demo race — so the preview never shows invented numbers. */
 function DemoPreview({ race }: { race: Race }) {
   const u = useUnits();
-  const settings = useStore((s) => s.settings);
   const car = activeCar(race);
-  const { p, top } = useMemo(() => {
-    const p = projectLive(race, car, settings, race.clock.anchorRaceSec);
-    return { p, top: generateRaceCalls(race, car, p, settings)[0] };
-  }, [race, car, settings]);
+  const { p, calls } = useLive(race, car, race.clock.anchorRaceSec);
+  const top = calls[0];
   const tl = useMemo(() => blocksFromLive(car, p), [car, p]);
   return (
     <div className="ld-preview">

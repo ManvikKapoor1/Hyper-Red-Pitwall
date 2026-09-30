@@ -3,20 +3,14 @@ import type { AlertItem } from '../../engine/calls';
 import { formatClock, formatDelta, formatDurationShort, wallClock } from '../../engine/format';
 import { RACE_STATES, type LiveProjection } from '../../engine/live';
 import { calculateTirePerformance, getCompound, TEMPLATE_LABEL } from '../../engine/model';
-import type { CallStatus, CarEntry, DriveMode, FuelMethod, Race } from '../../engine/types';
+import type { CallStatus, CarEntry, FuelMethod, Race } from '../../engine/types';
 import { driverName, driverOf } from '../../lib/hooks';
+import { DRIVE_MODES, MODE_LABEL } from '../../lib/labels';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { IconDriver, IconFuel, IconTire } from '../icons';
 import { Badge, Bar, ConfidenceBadge, NumInput, Panel, Seg, Stat } from '../ui';
 import { PriorityBadge } from './RaceStatusBadge';
-
-const MODES: { value: DriveMode; label: string }[] = [
-  { value: 'normal', label: 'Normal' },
-  { value: 'fuelSave', label: 'Fuel save' },
-  { value: 'energySave', label: 'Energy save' },
-  { value: 'push', label: 'Push' },
-];
 
 function flagColor(f?: string) {
   return f === 'LATE' ? 'red' : f === 'EARLY' ? 'amber' : f === 'OPTIMAL' ? 'green' : undefined;
@@ -88,11 +82,11 @@ export function CurrentStintCard({ race, car, p }: { race: Race; car: CarEntry; 
       <div className="cs-mode">
         <span className="label">Mode</span>
         <Seg
-          options={MODES}
+          options={DRIVE_MODES}
           value={live.driveMode}
           onChange={(m) => {
             setDriveMode(race.id, car.id, m);
-            logCall(race.id, car.id, `MODE → ${MODES.find((x) => x.value === m)!.label.toUpperCase()}`, 'INFO', 'Instructed by pitwall', 'ISSUED', 'manual');
+            logCall(race.id, car.id, `MODE → ${MODE_LABEL[m].toUpperCase()}`, 'INFO', 'Instructed by pitwall', 'ISSUED', 'manual');
           }}
         />
       </div>

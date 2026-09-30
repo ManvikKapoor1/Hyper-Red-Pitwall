@@ -9,7 +9,8 @@ import { ClockInput, NumInput, Panel } from '../../components/ui';
 import { usePlanResult } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
-import { IssueList, marginClass, type TabProps } from './shared';
+import { marginClass } from '../../lib/margins';
+import { IssueList, type TabProps } from './shared';
 
 export function SimulationTab({ race, car, res }: TabProps) {
   const u = useUnits();

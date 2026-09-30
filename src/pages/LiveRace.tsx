@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { RaceNotFound } from '../components/race/RaceContextBar';
 import { deriveAlerts } from '../engine/calls';
 import { formatClock } from '../engine/format';
 import { TEMPLATE_LABEL } from '../engine/model';
@@ -20,7 +21,7 @@ import type { CarEntry, Race } from '../engine/types';
 
 export function LiveRacePage() {
   const race = useRaceFromRoute();
-  if (!race) return <div className="empty">Race not found. <Link to="/app">Back to dashboard</Link></div>;
+  if (!race) return <RaceNotFound />;
   return <LiveRace race={race} car={activeCar(race)} />;
 }
 

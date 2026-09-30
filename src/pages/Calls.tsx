@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { RaceContextBar, RaceNotFound } from '../components/race/RaceContextBar';
 import { formatClock } from '../engine/format';
 import type { CallLogEntry, CallPriority, CallStatus, CarEntry, Race } from '../engine/types';
 import { StatusBadge } from '../components/race/LiveCards';
 import { useApplyCall } from '../components/race/RaceCallCard';
-import { CarSelector } from '../components/race/RaceHeader';
-import { PRIORITY_LABEL, PriorityBadge, RaceStatusBadge } from '../components/race/RaceStatusBadge';
-import { Field, Panel, SampleBadge, Seg, Stat } from '../components/ui';
+import { PRIORITY_LABEL, PriorityBadge } from '../components/race/RaceStatusBadge';
+import { ConfidenceBadge, Field, Panel, Seg, Stat } from '../components/ui';
 import { activeCar, useLive, useRaceFromRoute, useRaceNow } from '../lib/hooks';
 import { useStore } from '../store/store';
 
@@ -17,7 +17,7 @@ const QUICK = ['BOX THIS LAP', 'BOX NEXT LAP', 'STAY OUT', 'FUEL SAVE', 'ENERGY 
 
 export function CallsPage() {
   const race = useRaceFromRoute();
-  if (!race) return <div className="empty">Race not found. <Link to="/app">Back to dashboard</Link></div>;
+  if (!race) return <RaceNotFound />;
   return <Calls race={race} car={activeCar(race)} />;
 }
 
@@ -31,18 +31,18 @@ function Calls({ race, car }: { race: Race; car: CarEntry }) {
   const counts = useMemo(() => Object.fromEntries(STATUSES.map((s) => [s, log.filter((c) => c.status === s).length])) as Record<CallStatus, number>, [log]);
   return (
     <>
-      <div className="ctx-bar">
-        <span className="title ellipsis">{race.params.name}</span>
-        <CarSelector race={race} />
-        <RaceStatusBadge status={race.status} size="sm" />
-        {race.sample && <SampleBadge />}
+      <RaceContextBar
+        race={race}
+        actions={
+          <Link className="btn sm" to={`/app/race/${race.id}/live`}>
+            Live race
+          </Link>
+        }
+      >
         <span className="sublabel">
           {racing ? `Lap ${p.currentLap} · ${formatClock(nowSec)}` : car.live.phase === 'finished' ? 'Race finished' : 'Pre-race'} · STINT suggests calls; the pitwall decides and relays them.
         </span>
-        <Link className="btn sm" style={{ marginLeft: 'auto' }} to={`/app/race/${race.id}/live`}>
-          Live race
-        </Link>
-      </div>
+      </RaceContextBar>
       <div className="page full">
         <div className="calls-grid">
           <div className="col gap-8">
@@ -53,7 +53,7 @@ function Calls({ race, car }: { race: Race; car: CarEntry }) {
                   <div key={c.key} className={`sugg p-${c.priority}`}>
                     <div className="row between">
                       <PriorityBadge p={c.priority} size="sm" />
-                      <span className={`badge sm ghost ${c.confidence === 'HIGH' ? 'green' : c.confidence === 'MEDIUM' ? 'amber' : 'red'}`}>{c.confidence} CONF</span>
+                      <ConfidenceBadge c={c.confidence} />
                     </div>
                     <div className="sugg-t">{c.text}</div>
                     <ul className="call-reasons">
