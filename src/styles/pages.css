@@ -394,3 +394,22 @@ fieldset.plain-fs:disabled {
     grid-template-columns: 1fr;
   }
 }
+
+/* ── data ───────────────────────────────────────────────────────────── */
+.data-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 460px;
+  gap: 8px;
+  align-items: start;
+}
+.lap-table {
+  max-height: 560px;
+}
+.input-log {
+  max-height: 260px;
+}
+@media (max-width: 1300px) {
+  .data-grid {
+    grid-template-columns: 1fr;
+  }
+}

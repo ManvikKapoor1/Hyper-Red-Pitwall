@@ -4,6 +4,7 @@ import { generateRaceCalls } from '../calls';
 import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
 import { calculateFuelRemainingLaps, calculatePitLoss } from '../model';
+import { assumptionRows, driverStats } from '../assumptions';
 import { calculateStrategy } from '../simulate';
 import { withTirePattern } from '../planner';
 import { lapTrace, sliceTrace } from '../trace';
@@ -102,5 +103,28 @@ describe('what-if', () => {
     expect(opts).toHaveLength(4);
     expect(opts[0].plan).toBe(car.plan);
     expect(opts[1].result.tireSets).toBeGreaterThanOrEqual(opts[3].result.tireSets);
+  });
+});
+
+describe('assumptions', () => {
+  const race = createDemoRace();
+  const car = race.cars[0];
+  test('measured values come from recorded laps and stops only', () => {
+    const rows = assumptionRows(car);
+    const fuel = rows.find((r) => r.key === 'fuelPerLapL')!;
+    expect(fuel.measured).not.toBeNull();
+    expect(fuel.samples).toBeGreaterThan(10);
+    expect(fuel.adopt).toEqual({ fuelPerLapL: fuel.measured });
+    const lane = rows.find((r) => r.key === 'pitLaneLossSec')!;
+    expect(lane.samples).toBeLessThanOrEqual(car.live.stops.length);
+  });
+  test('an empty race measures nothing', () => {
+    const empty = { ...car, live: { ...car.live, laps: [], stops: [] } };
+    expect(assumptionRows(empty).every((r) => r.measured === null && r.adopt === undefined)).toBe(true);
+  });
+  test('driver stats cover every driver', () => {
+    const st = driverStats(car);
+    expect(st).toHaveLength(car.drivers.length);
+    expect(st.reduce((a, s) => a + s.laps, 0)).toBe(car.live.laps.length);
   });
 });
