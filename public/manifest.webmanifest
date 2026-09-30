@@ -1,0 +1,11 @@
+{
+  "name": "STINT — Strategy & Race Calls",
+  "short_name": "STINT",
+  "description": "Pitwall strategy planning and mid-race strategy adjustment for Le Mans Ultimate endurance racing.",
+  "start_url": "./#/app",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#07080a",
+  "theme_color": "#07080a",
+  "icons": [{ "src": "favicon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}
