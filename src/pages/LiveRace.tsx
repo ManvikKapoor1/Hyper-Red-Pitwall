@@ -3,13 +3,13 @@ import { Link } from 'react-router-dom';
 import { deriveAlerts } from '../engine/calls';
 import { formatClock } from '../engine/format';
 import { TEMPLATE_LABEL } from '../engine/model';
-import { AlertPanel, CurrentStintCard, EnergyCard, FuelCard, PaceCard, PitWindowCard, RaceCallHistory, RaceStatePanel, TireCard, UpcomingCalls } from '../components/race/LiveCards';
-import { LapTracePanel, RecentLaps } from '../components/race/LapTrace';
+import { AlertPanel, CurrentStintCard, EnergyCard, FuelCard, PaceCard, PitWindowCard, RaceCallHistory, RaceStatePanel, StrategyVersionsCard, TireCard, UpcomingCalls } from '../components/race/LiveCards';
 import { PitStopRecorder } from '../components/race/PitStopRecorder';
 import { QuickUpdatePanel } from '../components/race/QuickUpdatePanel';
 import { OverrideModal, RaceCallCard, useApplyCall } from '../components/race/RaceCallCard';
 import { RaceHeader } from '../components/race/RaceHeader';
 import { ScenarioPanel } from '../components/race/ScenarioPanel';
+import { WhereToGain } from '../components/race/WhereToGain';
 import { blocksFromLive, StrategyTimeline } from '../components/race/StrategyTimeline';
 import { Panel } from '../components/ui';
 import { activeCar, driverName, useHotkeys, useLive, useRaceFromRoute, useRaceNow } from '../lib/hooks';
@@ -78,7 +78,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         <CurrentStintCard race={race} car={car} p={p} />
         <RaceStatePanel race={race} car={car} p={p} onRecordStop={() => setStop({})} />
         <QuickUpdatePanel race={race} car={car} nowSec={nowSec} onRecordStop={(pre) => setStop(pre ?? {})} />
-        <RecentLaps car={car} />
+        <StrategyVersionsCard race={race} car={car} />
       </div>
       <div className="live-center">
         <Panel
@@ -149,7 +149,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
             </tbody>
           </table>
         </Panel>
-        <LapTracePanel race={race} car={car} />
+        <WhereToGain race={race} car={car} />
         <Panel className="live-scen" bodyClass="tight">
           <ScenarioPanel race={race} car={car} p={p} nowSec={nowSec} />
           <AlertPanel alerts={alerts} />

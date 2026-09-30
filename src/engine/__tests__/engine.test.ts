@@ -6,6 +6,7 @@ import { projectLive } from '../live';
 import { calculateFuelRemainingLaps, calculatePitLoss } from '../model';
 import { adoptMeasured, assumptionRows, driverStats } from '../assumptions';
 import { calculateStrategy } from '../simulate';
+import { findOpportunities } from '../opportunities';
 import { withTirePattern } from '../planner';
 import { lapTrace, sliceTrace } from '../trace';
 import { fuelSensitivity, tireOptions } from '../whatif';
@@ -136,5 +137,35 @@ describe('assumptions', () => {
     const st = driverStats(car);
     expect(st).toHaveLength(car.drivers.length);
     expect(st.reduce((a, s) => a + s.laps, 0)).toBe(car.live.laps.length);
+  });
+});
+
+describe('opportunities', () => {
+  const race = createDemoRace();
+  const car = race.cars[0];
+  const scan = findOpportunities(race, car, DEFAULT_SETTINGS)!;
+  test('re-simulates options from the current lap; better options first, by predicted gain', () => {
+    expect(scan.checked).toBeGreaterThanOrEqual(3);
+    expect(scan.base.option.current).toBe(true);
+    expect(scan.base.result.startLap).toBe(car.live.lapsCompleted + 1);
+    for (let i = 1; i < scan.list.length; i++) {
+      const a = scan.list[i - 1];
+      const b = scan.list[i];
+      if (a.better === b.better) expect(a.gainLaps > b.gainLaps || (a.gainLaps === b.gainLaps && a.gainSec >= b.gainSec)).toBe(true);
+      else expect(a.better).toBe(true);
+    }
+  });
+  test('options that run out of fuel are high risk and never marked better', () => {
+    for (const o of scan.list)
+      if (o.metrics.result.minFuelMarginLaps < 0) {
+        expect(o.risk).toBe('HIGH');
+        expect(o.better).toBe(false);
+      }
+  });
+  test('keeps the stints already driven', () => {
+    for (const o of scan.list) expect(o.option.plan.stints.slice(0, car.live.stintIndex + 1).map((s) => s.driverId)).toEqual(car.plan.stints.slice(0, car.live.stintIndex + 1).map((s) => s.driverId));
+  });
+  test('finished races have nothing to scan', () => {
+    expect(findOpportunities(race, { ...car, live: { ...car.live, phase: 'finished' } }, DEFAULT_SETTINGS)).toBeNull();
   });
 });

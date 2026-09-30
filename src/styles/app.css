@@ -369,7 +369,7 @@ body.focus-mode .sidebar {
   flex: 1 1 auto;
   min-height: 90px;
 }
-.live-left > .panel:not(.recent-laps),
+.live-left > .panel:not(.live-versions),
 .live-right > .panel:not(.live-queue) {
   flex: none;
 }
@@ -1336,34 +1336,11 @@ body.focus-mode .sidebar {
   font-size: 10.5px;
 }
 
-/* lap trace panel */
-.lap-trace {
-  flex: 1 1 auto;
-  min-height: 0;
-}
-.lap-trace > .panel-b {
-  flex: 1 1 auto;
-  display: flex;
-  min-height: 0;
-}
-.lt-grid {
-  flex: 1 1 auto;
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 10px;
-  min-height: 0;
-}
-.lt-grid.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 .lt-cell {
   display: flex;
   flex-direction: column;
   min-height: 0;
   min-width: 0;
-}
-.lap-trace .lc {
-  min-height: 140px;
 }
 .lt-h {
   display: flex;
@@ -1371,9 +1348,69 @@ body.focus-mode .sidebar {
   gap: 8px;
   padding: 0 0 2px 4px;
 }
-.recent-laps {
+/* where to gain */
+.w2g {
   flex: 1 1 auto;
-  min-height: 120px;
+  min-height: 0;
+  overflow: hidden;
+}
+.w2g > .panel-b {
+  overflow: auto;
+}
+.w2g-none {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.w2g-t td {
+  vertical-align: middle;
+}
+.w2g-t tr.better td:first-child {
+  box-shadow: inset 3px 0 0 var(--text-2);
+}
+.w2g-name {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+.w2g-t .sublabel {
+  max-width: 280px;
+}
+.w2g-gain {
+  font-size: 15px;
+  font-weight: 600;
+}
+.w2g-ch {
+  max-width: 300px;
+  white-space: normal !important;
+  font-size: 12px;
+}
+.w2g-why {
+  max-width: 190px;
+}
+/* strategy versions (live) */
+.live-versions {
+  flex: 1 1 auto;
+  min-height: 110px;
+}
+.ver-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--line);
+  font-size: 12.5px;
+}
+.ver-row.cur {
+  background: var(--panel-2);
+}
+.ver-v {
+  font-weight: 600;
+  width: 34px;
+}
+.ver-l {
+  width: 34px;
 }
 .select.xs {
   height: 20px;

@@ -1,3 +1,4 @@
+import { Link } from 'react-router-dom';
 import type { AlertItem } from '../../engine/calls';
 import { formatClock, formatDelta, formatDurationShort, wallClock } from '../../engine/format';
 import { RACE_STATES, type LiveProjection } from '../../engine/live';
@@ -521,5 +522,41 @@ export function UpcomingCalls({ calls }: { calls: { key: string; text: string; p
         </div>
       ))}
     </div>
+  );
+}
+
+/** Strategy versions in race order — which plan is running and why it changed. */
+export function StrategyVersionsCard({ race, car }: { race: Race; car: CarEntry }) {
+  const versions = [...car.versions].reverse();
+  return (
+    <Panel
+      title="Strategy versions"
+      className="live-versions"
+      scroll
+      bodyClass="flush"
+      meta={
+        <Link className="btn xs ghost" to={`/app/race/${race.id}/strategy/versions`}>
+          All
+        </Link>
+      }
+    >
+      {versions.length === 0 ? (
+        <div className="empty">No versions saved yet.</div>
+      ) : (
+        <div className="ver-log">
+          {versions.map((v, i) => (
+            <div key={v.id} className={`ver-row ${i === 0 ? 'cur' : ''}`} title={v.reason}>
+              <span className="mono ver-v">v{v.version}</span>
+              <span className="mono dim ver-l">{v.lap ? `L${v.lap}` : 'PRE'}</span>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div className="ellipsis">{v.label}</div>
+                <div className="sublabel ellipsis">{v.reason}</div>
+              </div>
+              {i === 0 && <Badge size="sm" color="blue">Active</Badge>}
+            </div>
+          ))}
+        </div>
+      )}
+    </Panel>
   );
 }
