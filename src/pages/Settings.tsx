@@ -27,25 +27,25 @@ export function SettingsPage() {
       <div className="settings-grid">
         <Panel title="Units & display">
           <div className="col gap-12">
-            <Field label="Fuel">
+            <Field group label="Fuel">
               <Seg options={[{ value: 'L' as const, label: 'Litres' }, { value: 'gal' as const, label: 'US gallons' }]} value={s.units.fuel} onChange={(v) => update({ units: { fuel: v } })} />
             </Field>
-            <Field label="Temperature">
+            <Field group label="Temperature">
               <Seg options={[{ value: 'C' as const, label: '°C' }, { value: 'F' as const, label: '°F' }]} value={s.units.temp} onChange={(v) => update({ units: { temp: v } })} />
             </Field>
-            <Field label="Distance">
+            <Field group label="Distance">
               <Seg options={[{ value: 'km' as const, label: 'km' }, { value: 'mi' as const, label: 'miles' }]} value={s.units.distance} onChange={(v) => update({ units: { distance: v } })} />
             </Field>
-            <Field label="Lap-time decimals" hint={`Example ${formatLapMs(95212, s.time.lapDecimals)}`}>
+            <Field group label="Lap-time decimals" hint={`Example ${formatLapMs(95212, s.time.lapDecimals)}`}>
               <Seg options={[1, 2, 3].map((n) => ({ value: n as 1 | 2 | 3, label: String(n) }))} value={s.time.lapDecimals} onChange={(v) => update({ time: { lapDecimals: v } })} />
             </Field>
-            <Field label="Clock">
+            <Field group label="Clock">
               <Seg options={[{ value: '24', label: '24 h' }, { value: '12', label: '12 h' }]} value={s.time.clock24h ? '24' : '12'} onChange={(v) => update({ time: { clock24h: v === '24' } })} />
             </Field>
-            <Field label="Fuel decimals" hint={`Example ${u.fuelU(18.37)}`}>
+            <Field group label="Fuel decimals" hint={`Example ${u.fuelU(18.37)}`}>
               <Seg options={[1, 2].map((n) => ({ value: n as 1 | 2, label: String(n) }))} value={s.numbers.fuelDecimals} onChange={(v) => update({ numbers: { fuelDecimals: v } })} />
             </Field>
-            <Field label="Decimal separator">
+            <Field group label="Decimal separator">
               <Seg options={[{ value: 'dot', label: '1.5' }, { value: 'comma', label: '1,5' }]} value={s.numbers.decimalComma ? 'comma' : 'dot'} onChange={(v) => update({ numbers: { decimalComma: v === 'comma' } })} />
             </Field>
           </div>
@@ -87,7 +87,7 @@ export function SettingsPage() {
             <Field label="Early-pit threshold (laps)" hint="Stops this far before the safe limit are flagged EARLY">
               <NumInput value={d.earlyPitThresholdLaps} decimals={0} min={0} onChange={(v) => setD({ earlyPitThresholdLaps: Math.round(v) })} />
             </Field>
-            <Field label="Tire strategy" className="span-2">
+            <Field group label="Tire strategy" className="span-2">
               <Seg options={[{ value: 'double' as const, label: 'Double stint' }, { value: 'every' as const, label: 'Every stop' }]} value={d.tireStrategy} onChange={(v) => setD({ tireStrategy: v })} />
             </Field>
             <Field label="Fuel method">

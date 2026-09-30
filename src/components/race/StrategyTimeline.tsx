@@ -58,30 +58,36 @@ export function blocksFromResult(res: StrategyResult, kind: TLBlock['kind'] = 'p
   };
 }
 
-/** Actual completed stints + live projection from the current stint onwards. */
-export function blocksFromLive(car: CarEntry, p: LiveProjection) {
-  const done = actualStints(car).filter((s) => s.index < car.live.stintIndex);
-  const proj = blocksFromResult(p.sim);
-  const blocks: TLBlock[] = [
-    ...done.map((s) => ({
+/** Recorded stints and stops (the running stint is marked current while racing). */
+export function blocksFromActual(car: CarEntry): { blocks: TLBlock[]; stops: TLStop[] } {
+  const racing = car.live.phase === 'racing';
+  return {
+    blocks: actualStints(car).map((s) => ({
       index: s.index,
       driverId: s.driverId,
       startLap: s.startLap,
       endLap: s.endLap,
       startSec: s.startSec,
       endSec: s.endSec,
-      kind: 'done' as const,
+      kind: racing && s.index === car.live.stintIndex ? 'current' : 'done',
       compound: s.compound,
       newTires: false,
       final: false,
       laps: s.laps,
     })),
+    stops: car.live.stops.map((s) => ({ lap: s.lap, sec: s.raceTimeSec, fuel: s.fuelAddedL > 0.05, tires: s.changeTires, driver: s.fromDriverId !== s.toDriverId, kind: 'done', label: `PIT ${s.index + 1} · L${s.lap}` })),
+  };
+}
+
+/** Actual completed stints + live projection from the current stint onwards. */
+export function blocksFromLive(car: CarEntry, p: LiveProjection) {
+  const actual = blocksFromActual(car);
+  const proj = blocksFromResult(p.sim);
+  const blocks: TLBlock[] = [
+    ...actual.blocks.filter((b) => b.index < car.live.stintIndex),
     ...proj.blocks.map((b, i) => (i === 0 && car.live.phase === 'racing' ? { ...b, kind: 'current' as const } : b)),
   ];
-  const stops: TLStop[] = [
-    ...car.live.stops.map((s) => ({ lap: s.lap, sec: s.raceTimeSec, fuel: s.fuelAddedL > 0.05, tires: s.changeTires, driver: s.fromDriverId !== s.toDriverId, kind: 'done' as const, label: `PIT ${s.index + 1} · L${s.lap}` })),
-    ...proj.stops.map((s, i) => ({ ...s, label: `PIT ${car.live.stops.length + i + 1} · L${s.lap}` })),
-  ];
+  const stops: TLStop[] = [...actual.stops, ...proj.stops.map((s, i) => ({ ...s, label: `PIT ${car.live.stops.length + i + 1} · L${s.lap}` }))];
   return { blocks, stops };
 }
 

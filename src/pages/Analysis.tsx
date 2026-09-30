@@ -7,7 +7,7 @@ import type { CarEntry, Race } from '../engine/types';
 import { LineChart, ChartLegend } from '../components/charts/LineChart';
 import { CarSelector } from '../components/race/RaceHeader';
 import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
-import { blocksFromResult, StrategyTimeline, type TLBlock, type TLStop } from '../components/race/StrategyTimeline';
+import { blocksFromActual, blocksFromResult, StrategyTimeline } from '../components/race/StrategyTimeline';
 import { Panel, SampleBadge, Stat } from '../components/ui';
 import { activeCar, useRaceFromRoute } from '../lib/hooks';
 import { useUnits } from '../lib/units';
@@ -27,33 +27,13 @@ export function AnalysisPage() {
 function Analysis({ race, car }: { race: Race; car: CarEntry }) {
   const u = useUnits();
   const sum = useMemo(() => postRaceSummary(race, car), [race, car]);
-  const trace = useMemo(() => lapTrace(car, race.events), [car, race.events]);
+  // dashed "plan" lines use the planned version, not the (possibly edited) current plan
+  const trace = useMemo(() => {
+    const v = car.versions[0];
+    return lapTrace(v ? { ...car, setup: v.setup, plan: v.plan } : car, race.events);
+  }, [car, race.events]);
   const plan = blocksFromResult(sum.planned);
-  const actual = useMemo(() => {
-    const blocks: TLBlock[] = sum.stints.map((s) => ({
-      index: s.index,
-      driverId: s.driverId,
-      startLap: s.startLap,
-      endLap: s.endLap,
-      startSec: s.startSec,
-      endSec: s.endSec,
-      kind: 'done',
-      compound: s.compound,
-      newTires: false,
-      final: false,
-      laps: s.laps,
-    }));
-    const stops: TLStop[] = car.live.stops.map((s) => ({
-      lap: s.lap,
-      sec: s.raceTimeSec,
-      fuel: s.fuelAddedL > 0.05,
-      tires: s.changeTires,
-      driver: s.fromDriverId !== s.toDriverId,
-      kind: 'done',
-      label: `PIT ${s.index + 1} · L${s.lap}`,
-    }));
-    return { blocks, stops };
-  }, [sum.stints, car.live.stops]);
+  const actual = useMemo(() => blocksFromActual(car), [car]);
   const vlines = sum.stints.slice(1).map((s) => ({ x: s.startLap - 0.5, label: `S${s.index + 1}` }));
   const lastLap = car.live.laps[car.live.laps.length - 1]?.lap ?? 0;
   const lapAt = (sec: number) => car.live.laps.find((l) => l.endSec >= sec)?.lap ?? lastLap;

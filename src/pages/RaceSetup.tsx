@@ -1,7 +1,8 @@
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { DRIVER_COLORS } from '../engine/factory';
 import { netEnergyPerLap } from '../engine/model';
+import { planUsesCompound } from '../engine/planner';
 import { calculateRequiredStops, calculateStintLength, estimateRaceLaps } from '../engine/simulate';
 import type { CarEntry, CarSetup, CompoundSpec, DriveMode, Race, RaceParams, ServiceConcurrency } from '../engine/types';
 import { CarSelector } from '../components/race/RaceHeader';
@@ -112,7 +113,7 @@ function RaceSection({ race }: { race: Race }) {
         <Field label={`Track length (${u.distUnit})`}>
           <NumInput value={u.distVal(p.trackLengthKm)} decimals={3} min={0} onChange={(v) => set({ trackLengthKm: u.distFromDisplay(v) })} />
         </Field>
-        <Field label="Race length">
+        <Field group label="Race length">
           <Seg options={[{ value: 'time' as const, label: 'Timed' }, { value: 'laps' as const, label: 'Laps' }]} value={p.lengthMode} onChange={(v) => set({ lengthMode: v })} />
         </Field>
         {p.lengthMode === 'time' ? (
@@ -209,7 +210,7 @@ function CarSection({ race, car }: { race: Race; car: CarEntry }) {
           <LapTimeInput value={s.wetPaceMs} onChange={(ms) => set({ wetPaceMs: ms })} />
         </Field>
         <Field label={`Fuel weight effect (s per ${u.fuelUnit})`} hint="0 = ignore">
-          <NumInput value={s.fuelEffectSecPerL} decimals={3} step={0.001} min={0} onChange={(v) => set({ fuelEffectSecPerL: v })} />
+          <NumInput value={s.fuelEffectSecPerL / u.fuelVal(1)} decimals={3} step={0.001} min={0} onChange={(v) => set({ fuelEffectSecPerL: v * u.fuelVal(1) })} />
         </Field>
       </div>
     </Panel>
@@ -244,7 +245,7 @@ function PitSection({ race, car }: { race: Race; car: CarEntry }) {
         <Field label="Driver change (s)">
           <NumInput value={s.driverChangeSec} decimals={1} min={0} onChange={(v) => set({ driverChangeSec: v })} />
         </Field>
-        <Field label="Service order" className="span-2">
+        <Field group label="Service order" className="span-2">
           <Seg options={CONC} value={s.concurrency} onChange={(v) => set({ concurrency: v })} />
         </Field>
       </div>
@@ -332,7 +333,9 @@ function MarginsSection({ race, car }: { race: Race; car: CarEntry }) {
 
 function TiresSection({ race, car }: { race: Race; car: CarEntry }) {
   const set = useSetup(race, car);
+  const renameCompound = useStore((s) => s.renameCompound);
   const cs = car.setup.compounds;
+  const inUse = (name: string) => planUsesCompound(car.plan, name) || car.live.compound === name;
   const upd = (i: number, patch: Partial<CompoundSpec>) => set({ compounds: cs.map((c, k) => (k === i ? { ...c, ...patch } : c)) });
   const num = (i: number, k: keyof CompoundSpec, d: number, step = 1): ReactNode => <NumInput size="sm" value={cs[i][k] as number} decimals={d} step={step} onChange={(v) => upd(i, { [k]: v })} />;
   return (
@@ -362,7 +365,7 @@ function TiresSection({ race, car }: { race: Race; car: CarEntry }) {
           {cs.map((c, i) => (
             <tr key={i}>
               <td>
-                <input className="input sm" value={c.name} onChange={(e) => upd(i, { name: e.target.value.toUpperCase() })} />
+                <CompoundName name={c.name} taken={cs.map((x) => x.name)} onRename={(to) => renameCompound(race.id, car.id, c.name, to)} />
               </td>
               <td className="n">{num(i, 'paceOffsetSec', 2, 0.05)}</td>
               <td className="n">{num(i, 'degSecPerLap', 3, 0.005)}</td>
@@ -370,7 +373,7 @@ function TiresSection({ race, car }: { race: Race; car: CarEntry }) {
               <td className="n">{num(i, 'maxLife', 0)}</td>
               <td className="n">{num(i, 'cliffSecPerLap', 3, 0.01)}</td>
               <td className="right">
-                <button className="btn xs ghost icon" disabled={cs.length <= 1} title="Remove compound" onClick={() => set({ compounds: cs.filter((_, k) => k !== i) })}>
+                <button className="btn xs ghost icon" disabled={cs.length <= 1 || inUse(c.name)} title={inUse(c.name) ? 'Used by the plan or fitted to the car — change those first' : 'Remove compound'} onClick={() => set({ compounds: cs.filter((_, k) => k !== i) })}>
                   <IconTrash size={12} />
                 </button>
               </td>
@@ -406,7 +409,7 @@ function DriversSection({ race, car }: { race: Race; car: CarEntry }) {
             <th>Code</th>
             <th>#</th>
             <th>Race pace</th>
-            <th className="n" title="Blank = car value">Fuel/lap</th>
+            <th className="n" title="Blank = car value">Fuel/lap {u.fuelUnit}</th>
             <th className="n" title="Preferred stint laps">Pref.</th>
             <th className="n" title="Minimum stint laps">Min</th>
             <th className="n" title="Maximum stint laps">Max</th>
@@ -437,19 +440,19 @@ function DriversSection({ race, car }: { race: Race; car: CarEntry }) {
                   <input className="input sm" style={{ width: 48 }} value={d.number ?? ''} onChange={(e) => set({ number: e.target.value })} />
                 </td>
                 <td style={{ width: 104 }}>
-                  <LapTimeInput size="sm" value={d.paceMs} onChange={(ms) => set({ paceMs: ms })} />
+                  <LapTimeInput size="sm" value={d.paceMs} onChange={(ms) => set({ paceMs: ms })} onClear={() => set({ paceMs: undefined })} />
                 </td>
                 <td className="n" style={{ width: 80 }}>
-                  <NumInput size="sm" value={d.fuelPerLapL == null ? null : u.fuelVal(d.fuelPerLapL)} decimals={3} step={0.01} placeholder="car" onChange={(v) => set({ fuelPerLapL: u.fuelFromDisplay(v) })} />
+                  <NumInput size="sm" value={d.fuelPerLapL == null ? null : u.fuelVal(d.fuelPerLapL)} decimals={3} step={0.01} min={0.01} placeholder="car" onChange={(v) => set({ fuelPerLapL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapL: undefined })} />
                 </td>
                 <td className="n" style={{ width: 64 }}>
-                  <NumInput size="sm" value={d.preferredStintLaps} decimals={0} min={0} placeholder="—" onChange={(v) => set({ preferredStintLaps: Math.round(v) })} />
+                  <NumInput size="sm" value={d.preferredStintLaps} decimals={0} min={1} placeholder="—" onChange={(v) => set({ preferredStintLaps: Math.round(v) })} onClear={() => set({ preferredStintLaps: undefined })} />
                 </td>
                 <td className="n" style={{ width: 64 }}>
-                  <NumInput size="sm" value={d.minStintLaps} decimals={0} min={0} placeholder="—" onChange={(v) => set({ minStintLaps: Math.round(v) })} />
+                  <NumInput size="sm" value={d.minStintLaps} decimals={0} min={1} placeholder="—" onChange={(v) => set({ minStintLaps: Math.round(v) })} onClear={() => set({ minStintLaps: undefined })} />
                 </td>
                 <td className="n" style={{ width: 64 }}>
-                  <NumInput size="sm" value={d.maxStintLaps} decimals={0} min={0} placeholder="—" onChange={(v) => set({ maxStintLaps: Math.round(v) })} />
+                  <NumInput size="sm" value={d.maxStintLaps} decimals={0} min={1} placeholder="—" onChange={(v) => set({ maxStintLaps: Math.round(v) })} onClear={() => set({ maxStintLaps: undefined })} />
                 </td>
                 <td>
                   <input className="input sm" style={{ width: 84 }} value={d.tirePreference ?? ''} onChange={(e) => set({ tirePreference: e.target.value })} />
@@ -468,5 +471,23 @@ function DriversSection({ race, car }: { race: Race; car: CarEntry }) {
         </tbody>
       </table>
     </Panel>
+  );
+}
+
+/** Compound names commit on blur so every plan / live reference is renamed with them. */
+function CompoundName({ name, taken, onRename }: { name: string; taken: string[]; onRename: (to: string) => void }) {
+  const [draft, setDraft] = useState(name);
+  useEffect(() => setDraft(name), [name]);
+  const next = draft.trim().toUpperCase();
+  const clash = next !== name && taken.includes(next);
+  return (
+    <input
+      className={`input sm ${clash ? 'invalid' : ''}`}
+      value={draft}
+      title={clash ? 'Another compound already has this name' : 'Renames the compound in the plan and live data too'}
+      onChange={(e) => setDraft(e.target.value.toUpperCase())}
+      onBlur={() => (next && !clash && next !== name ? onRename(next) : setDraft(name))}
+      onKeyDown={(e) => e.key === 'Enter' && (e.currentTarget as HTMLInputElement).blur()}
+    />
   );
 }

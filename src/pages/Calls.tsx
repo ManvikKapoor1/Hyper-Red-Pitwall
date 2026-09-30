@@ -136,7 +136,7 @@ function ManualCall({ race, car }: { race: Race; car: CarEntry }) {
         <Field label="Call">
           <input className="input" value={text} placeholder="e.g. BOX NEXT LAP — FUEL ONLY" onChange={(e) => setText(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && submit()} />
         </Field>
-        <Field label="Priority">
+        <Field group label="Priority">
           <Seg options={PRIORITIES.map((p) => ({ value: p, label: p === 'ACTION' ? 'Action' : p.charAt(0) + p.slice(1).toLowerCase(), title: PRIORITY_LABEL[p] }))} value={priority} onChange={setPriority} />
         </Field>
         <Field label="Reason">

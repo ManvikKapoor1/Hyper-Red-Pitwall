@@ -15,7 +15,12 @@ const TAG_COLOR: Partial<Record<StrategyTag, 'blue' | 'amber'>> = {
 export function AlternativesTab({ race, car }: TabProps) {
   const u = useUnits();
   const setPlan = useStore((s) => s.setPlan);
-  const metrics = useMemo(() => compareStrategies(race.params, car, generateAlternatives({ race: race.params, car })), [race.params, car]);
+  const { setup, plan, drivers } = car;
+  const metrics = useMemo(() => {
+    const planCar = { ...car, setup, plan, drivers };
+    return compareStrategies(race.params, planCar, generateAlternatives({ race: race.params, car: planCar }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- live data does not affect pre-race alternatives
+  }, [race.params, setup, plan, drivers]);
   const [sel, setSel] = useState('current');
   const chosen = metrics.find((m) => m.option.id === sel) ?? metrics[0];
   const tl = blocksFromResult(chosen.result);

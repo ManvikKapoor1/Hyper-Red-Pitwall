@@ -120,6 +120,8 @@ export function demoAdvanceLap(race: Race, car: CarEntry, settings: Settings, o:
         totalLossSec: total,
         underEvent: ev?.type,
         note: 'Demo feed',
+        stationaryTimed: true,
+        totalTimed: true,
       },
       live.lastLapEndSec,
       settings,

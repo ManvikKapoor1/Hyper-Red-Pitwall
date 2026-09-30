@@ -81,7 +81,7 @@ function Strategy({ race, car }: { race: Race; car: CarEntry }) {
             </NavLink>
           ))}
         </nav>
-        {current.el({ race, car, res })}
+        <div key={car.id}>{current.el({ race, car, res })}</div>
       </div>
       {saving && <SaveVersionModal race={race} car={car} onClose={() => setSaving(false)} />}
     </>

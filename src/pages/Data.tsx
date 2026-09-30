@@ -1,6 +1,6 @@
 import { useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { assumptionRows, driverStats, type AssumptionKey, type AssumptionRow } from '../engine/assumptions';
+import { assumptionRows, driverStats, type AssumptionKey } from '../engine/assumptions';
 import { formatClock, formatDelta } from '../engine/format';
 import { uid } from '../engine/planner';
 import type { CarEntry, Race } from '../engine/types';
@@ -66,16 +66,10 @@ function Data({ race, car }: { race: Race; car: CarEntry }) {
 
 function Assumptions({ race, car }: { race: Race; car: CarEntry }) {
   const u = useUnits();
-  const updateSetup = useStore((s) => s.updateSetup);
-  const toast = useStore((s) => s.toast);
-  const rows = useMemo(() => assumptionRows(car), [car]);
-  const adopt = (r: AssumptionRow) => {
-    if (!r.adopt) return;
-    updateSetup(race.id, car.id, r.adopt);
-    toast(`${r.label} set to measured value — plan recalculated`, 'ok');
-  };
+  const adopt = useStore((s) => s.adoptAssumption);
+  const rows = useMemo(() => assumptionRows(car, race.events), [car, race.events]);
   return (
-    <Panel title="Assumptions vs measured" meta={<span className="sublabel">green-flag, non-estimated laps only · adopting a value marks the plan as changed</span>} bodyClass="flush">
+    <Panel title="Assumptions vs measured" meta={<span className="sublabel">green, non-estimated laps compared with the plan’s per-lap assumption · timed stops only</span>} bodyClass="flush">
       <table className="table">
         <thead>
           <tr>
@@ -103,7 +97,7 @@ function Assumptions({ race, car }: { race: Race; car: CarEntry }) {
                 <td className="sublabel">{r.samples ? r.basis : 'no data yet'}</td>
                 <td>{r.samples > 0 ? <ConfidenceBadge c={r.confidence} basis={r.basis} /> : <span className="dim">—</span>}</td>
                 <td className="right">
-                  <button className="btn xs" disabled={!r.adopt || r.samples < 3} onClick={() => adopt(r)} title={r.samples < 3 ? 'Needs at least 3 samples' : 'Write the measured value into Race Setup'}>
+                  <button className="btn xs" disabled={r.measured == null || r.samples < 3} onClick={() => adopt(race.id, car.id, r.key)} title={r.samples < 3 ? 'Needs at least 3 samples' : 'Write the measured value into Race Setup (driver offsets are kept)'}>
                     Use measured
                   </button>
                 </td>

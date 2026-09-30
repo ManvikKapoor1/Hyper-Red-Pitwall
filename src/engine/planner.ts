@@ -32,6 +32,20 @@ export function clonePlan(plan: StrategyPlan): StrategyPlan {
   return JSON.parse(JSON.stringify(plan)) as StrategyPlan;
 }
 
+/** Rename a compound everywhere the plan references it. */
+export function renameCompoundInPlan(plan: StrategyPlan, from: Compound, to: Compound): StrategyPlan {
+  return {
+    ...plan,
+    startCompound: plan.startCompound === from ? to : plan.startCompound,
+    stints: plan.stints.map((s) => (s.stop.compound === from ? { ...s, stop: { ...s.stop, compound: to } } : s)),
+  };
+}
+
+/** True when the plan uses the compound (start set or any stop). */
+export function planUsesCompound(plan: StrategyPlan, name: Compound): boolean {
+  return plan.startCompound === name || plan.stints.some((s) => s.stop.changeTires && s.stop.compound === name);
+}
+
 export function addStint(plan: StrategyPlan, afterIndex = plan.stints.length - 1): StrategyPlan {
   const p = clonePlan(plan);
   const ref = p.stints[Math.max(0, Math.min(afterIndex, p.stints.length - 1))];

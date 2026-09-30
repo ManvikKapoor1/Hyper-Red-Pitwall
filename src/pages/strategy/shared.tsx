@@ -18,11 +18,7 @@ export const MODE_OPTIONS: { value: DriveMode; label: string }[] = [
 
 export const MODE_LABEL: Record<DriveMode, string> = { normal: 'Normal', fuelSave: 'Fuel save', energySave: 'Energy save', push: 'Push' };
 
-/** Colour only when a margin is race-critical. */
-export function marginClass(laps: number, warn = 1): string {
-  const eps = 1e-6; // a margin of exactly the reserve is fine
-  return laps < -eps ? 'c-red' : laps < warn - eps ? 'c-amber' : '';
-}
+export { marginClass } from '../../lib/margins';
 
 export function flagClass(flag?: string): string {
   return flag === 'LATE' ? 'c-red' : flag === 'EARLY' ? 'c-amber' : '';

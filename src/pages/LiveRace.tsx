@@ -13,6 +13,7 @@ import { ScenarioPanel } from '../components/race/ScenarioPanel';
 import { blocksFromLive, StrategyTimeline } from '../components/race/StrategyTimeline';
 import { Panel } from '../components/ui';
 import { activeCar, driverName, useHotkeys, useLive, useRaceFromRoute, useRaceNow } from '../lib/hooks';
+import { marginClass } from '../lib/margins';
 import { useUnits } from '../lib/units';
 import { useStore } from '../store/store';
 import type { CarEntry, Race } from '../engine/types';
@@ -68,6 +69,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
   );
 
   const nextStints = p.sim.stints.slice(1, 4);
+  const crit = settings.alerts.fuelMarginCritLaps;
 
   return (
     <div className="live">
@@ -122,7 +124,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
                   <td className="dim">NOW</td>
                   <td>{p.current.compound}</td>
                   <td className="n dim">—</td>
-                  <td className={`n ${marginClass(p.current.fuelMarginLaps)}`}>{u.n(p.current.fuelMarginLaps, 1)}</td>
+                  <td className={`n ${marginClass(p.current.fuelMarginLaps, crit)}`}>{u.n(p.current.fuelMarginLaps, 1)}</td>
                   {car.setup.energyEnabled && <td className={`n ${marginClass(p.current.energyMarginLaps)}`}>{u.n(p.current.energyMarginLaps, 1)}</td>}
                   <td className="dim">{p.current.final ? 'FINAL' : p.current.flag}</td>
                 </tr>
@@ -138,7 +140,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
                     <td className="ellipsis" style={{ maxWidth: 170 }}>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
                     <td className={s.newTires ? '' : 'dim'}>{s.newTires ? `NEW ${s.compound}` : `${s.compound} +${s.tireAgeStart}`}</td>
                     <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
-                    <td className={`n ${marginClass(s.fuelMarginLaps)}`}>{u.n(s.fuelMarginLaps, 1)}</td>
+                    <td className={`n ${marginClass(s.fuelMarginLaps, crit)}`}>{u.n(s.fuelMarginLaps, 1)}</td>
                     {car.setup.energyEnabled && <td className={`n ${marginClass(s.energyMarginLaps)}`}>{u.n(s.energyMarginLaps, 1)}</td>}
                     <td className="dim">{s.final ? 'FINAL' : s.flag}</td>
                   </tr>
@@ -173,8 +175,4 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
       {stop && <PitStopRecorder race={race} car={car} p={p} nowSec={nowSec} prefill={stop} onClose={() => setStop(null)} />}
     </div>
   );
-}
-
-function marginClass(laps: number) {
-  return laps < 0 ? 'c-red' : laps < 1 ? 'c-amber' : '';
 }

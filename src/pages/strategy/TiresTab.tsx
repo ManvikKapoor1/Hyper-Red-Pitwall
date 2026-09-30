@@ -72,7 +72,9 @@ export function TiresTab({ race, car, res }: TabProps) {
           <tbody>
             {opts.map((o, i) => {
               const r = o.result;
-              const crit = r.issues.filter((x) => x.severity !== 'info');
+              const crit = r.issues.filter((x) => x.severity === 'critical');
+              const warn = r.issues.filter((x) => x.severity === 'warning');
+              const shown = crit.length ? crit : warn;
               return (
                 <tr key={o.key} className={i === 0 ? 'cur' : ''}>
                   <td>
@@ -89,8 +91,8 @@ export function TiresTab({ race, car, res }: TabProps) {
                   <td className="n">{r.totalLaps}</td>
                   <td className="n">{formatClock(r.finishSec)}</td>
                   <td className="n">{i === 0 ? '—' : `${formatDelta(r.totalPitLossSec - base.totalPitLossSec, 1)} s`}</td>
-                  <td className={crit.length ? 'c-amber ellipsis' : 'dim'} style={{ maxWidth: 260 }} title={crit.map((c) => c.message).join('\n')}>
-                    {crit.length ? `${crit.length} warning${crit.length > 1 ? 's' : ''} — ${crit[0].message}` : 'OK'}
+                  <td className={`ellipsis ${crit.length ? 'c-red' : warn.length ? 'c-amber' : 'dim'}`} style={{ maxWidth: 260 }} title={[...crit, ...warn].map((c) => c.message).join('\n')}>
+                    {shown.length ? `${shown.length} ${crit.length ? 'critical' : `warning${shown.length > 1 ? 's' : ''}`} — ${shown[0].message}` : 'OK'}
                   </td>
                   <td className="right">
                     {i > 0 && !samePattern(i) && (

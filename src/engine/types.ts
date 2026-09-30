@@ -231,6 +231,9 @@ export interface ActualStop {
   totalLossSec: number;
   underEvent?: ScenarioType;
   note?: string;
+  /** true when the time was entered / timed, false when the setup estimate was accepted */
+  stationaryTimed?: boolean;
+  totalTimed?: boolean;
 }
 
 export type CallPriority = 'CRITICAL' | 'ACTION' | 'UPCOMING' | 'INFO';

@@ -114,13 +114,28 @@ export function Modal({ title, onClose, children, footer, wide }: { title: React
   );
 }
 
-export function Field({ label, hint, children, right, className = '' }: { label: ReactNode; hint?: ReactNode; children: ReactNode; right?: ReactNode; className?: string }) {
+/**
+ * Labelled form row. Use `group` when the field holds several controls (segmented
+ * buttons, checkbox + select …): a <label> would forward clicks to the first one.
+ */
+export function Field({ label, hint, children, right, className = '', group }: { label: ReactNode; hint?: ReactNode; children: ReactNode; right?: ReactNode; className?: string; group?: boolean }) {
+  const head = (
+    <span className="label">
+      <span>{label}</span>
+      {right}
+    </span>
+  );
+  if (group)
+    return (
+      <div className={`field ${className}`} role="group" aria-label={typeof label === 'string' ? label : undefined}>
+        {head}
+        {children}
+        {hint && <span className="hint">{hint}</span>}
+      </div>
+    );
   return (
     <label className={`field ${className}`}>
-      <span className="label">
-        <span>{label}</span>
-        {right}
-      </span>
+      {head}
       {children}
       {hint && <span className="hint">{hint}</span>}
     </label>
@@ -141,9 +156,12 @@ export function NumInput({
   size,
   disabled,
   autoFocus,
+  onClear,
 }: {
   value: number | null | undefined;
   onChange: (v: number) => void;
+  /** Called when the field is emptied; without it an empty field reverts. */
+  onClear?: () => void;
   unit?: string;
   decimals?: number;
   step?: number;
@@ -164,6 +182,10 @@ export function NumInput({
   }, [value, focus]);
   const commit = () => {
     const n = Number(draft.replace(',', '.'));
+    if (draft.trim() === '' && onClear) {
+      if (value != null) onClear();
+      return;
+    }
     if (draft.trim() === '' || !isFinite(n)) {
       setDraft(fmt(value));
       return;
@@ -212,7 +234,7 @@ export function NumInput({
   );
 }
 
-export function LapTimeInput({ value, onChange, className = '', size }: { value: number | null | undefined; onChange: (ms: number) => void; className?: string; size?: 'sm' | 'lg' }) {
+export function LapTimeInput({ value, onChange, onClear, className = '', size }: { value: number | null | undefined; onChange: (ms: number) => void; onClear?: () => void; className?: string; size?: 'sm' | 'lg' }) {
   const [draft, setDraft] = useState(value ? formatLapMs(value) : '');
   const [focus, setFocus] = useState(false);
   const [bad, setBad] = useState(false);
@@ -234,6 +256,10 @@ export function LapTimeInput({ value, onChange, className = '', size }: { value:
       }}
       onBlur={() => {
         setFocus(false);
+        if (draft.trim() === '' && onClear) {
+          if (value != null) onClear();
+          return;
+        }
         const ms = parseLapTime(draft);
         if (ms == null) {
           setBad(draft.trim() !== '');

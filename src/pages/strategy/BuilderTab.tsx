@@ -192,15 +192,15 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
               ))}
             </select>
           </Field>
-          <Field label="Lap time override" right={st.lapTimeOverrideMs != null && <button className="btn xs ghost" onClick={() => set({ lapTimeOverrideMs: undefined })}>clear</button>} hint="Blank = driver / car pace">
-            <LapTimeInput value={st.lapTimeOverrideMs} onChange={(ms) => set({ lapTimeOverrideMs: ms })} />
+          <Field group label="Lap time override" right={st.lapTimeOverrideMs != null && <button className="btn xs ghost" onClick={() => set({ lapTimeOverrideMs: undefined })}>clear</button>} hint="Blank = driver / car pace">
+            <LapTimeInput value={st.lapTimeOverrideMs} onChange={(ms) => set({ lapTimeOverrideMs: ms })} onClear={() => set({ lapTimeOverrideMs: undefined })} />
           </Field>
-          <Field label={`Fuel/lap override (${u.fuelUnit})`} right={st.fuelPerLapOverrideL != null && <button className="btn xs ghost" onClick={() => set({ fuelPerLapOverrideL: undefined })}>clear</button>} hint="Blank = car value × driver factor">
-            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} />
+          <Field group label={`Fuel/lap override (${u.fuelUnit})`} right={st.fuelPerLapOverrideL != null && <button className="btn xs ghost" onClick={() => set({ fuelPerLapOverrideL: undefined })}>clear</button>} hint="Blank = car value × driver factor">
+            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapOverrideL: undefined })} />
           </Field>
           {car.setup.energyEnabled ? (
-            <Field label="Energy budget (%)" right={st.energyTargetPct != null && <button className="btn xs ghost" onClick={() => set({ energyTargetPct: undefined })}>clear</button>} hint="Optional stint energy budget">
-              <NumInput value={st.energyTargetPct} decimals={1} min={0} max={100} placeholder="—" onChange={(v) => set({ energyTargetPct: v })} />
+            <Field group label="Energy budget (%)" right={st.energyTargetPct != null && <button className="btn xs ghost" onClick={() => set({ energyTargetPct: undefined })}>clear</button>} hint="Optional stint energy budget">
+              <NumInput value={st.energyTargetPct} decimals={1} min={0} max={100} placeholder="—" onChange={(v) => set({ energyTargetPct: v })} onClear={() => set({ energyTargetPct: undefined })} />
             </Field>
           ) : (
             <div />
@@ -223,17 +223,17 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
                 ))}
               </select>
             </Field>
-            <Field label="Fuel">
+            <Field group label="Fuel">
               <RefillInput value={st.stop.fuel} unit={u.fuelUnit} toDisplay={u.fuelVal} fromDisplay={u.fuelFromDisplay} onChange={(v) => setStop({ fuel: v })} />
             </Field>
             {car.setup.energyEnabled ? (
-              <Field label="Energy">
+              <Field group label="Energy">
                 <RefillInput value={st.stop.energy} unit="%" onChange={(v) => setStop({ energy: v })} />
               </Field>
             ) : (
               <div />
             )}
-            <Field label="Tires">
+            <Field group label="Tires">
               <div className="row gap-8">
                 <label className="check">
                   <input type="checkbox" checked={st.stop.changeTires} onChange={(e) => setStop({ changeTires: e.target.checked })} /> Change
@@ -363,7 +363,7 @@ function PlanSettings({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) =>
         <Field label="Start tire age (laps)">
           <NumInput value={plan.startTireAge} decimals={0} min={0} onChange={(v) => set({ startTireAge: Math.round(v) })} />
         </Field>
-        <Field label="Start fuel" className="span-2">
+        <Field group label="Start fuel" className="span-2">
           <RefillInput value={plan.startFuel} unit={u.fuelUnit} toDisplay={u.fuelVal} fromDisplay={u.fuelFromDisplay} onChange={(v) => set({ startFuel: v })} />
         </Field>
         {car.setup.energyEnabled && (
@@ -386,7 +386,8 @@ function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => vo
   const [mode, setMode] = useState<DriveMode>('normal');
   const [dist, setDist] = useState<Distribution>('even');
   const [order, setOrder] = useState(() => car.drivers.map((d) => d.id));
-  const ordered = order.filter((id) => car.drivers.some((d) => d.id === id));
+  // keep the chosen order, drop removed drivers and append new ones
+  const ordered = [...order.filter((id) => car.drivers.some((d) => d.id === id)), ...car.drivers.filter((d) => !order.includes(d.id)).map((d) => d.id)];
   const limiter = full.overall === full.fuel ? 'fuel' : full.overall === full.energy ? 'energy' : full.overall === full.tire ? 'tires' : 'driver';
   return (
     <Panel title="Auto-build" meta={<span className="sublabel">replaces all stints</span>}>
@@ -397,19 +398,19 @@ function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => vo
         <Field label="Stops">
           <NumInput value={stops} decimals={0} min={0} onChange={(v) => setStops(Math.round(v))} />
         </Field>
-        <Field label="Stint laps">
+        <Field group label="Stint laps">
           <Seg options={[{ value: 'even' as Distribution, label: 'Even' }, { value: 'maxFirst' as Distribution, label: 'Max first' }]} value={dist} onChange={setDist} />
         </Field>
-        <Field label="New tires">
+        <Field group label="New tires">
           <Seg options={[1, 2, 3, 0].map((n) => ({ value: n, label: n === 0 ? 'Never' : n === 1 ? 'Every' : `×${n}` , title: n === 0 ? 'Never change tires' : n === 1 ? 'Every stop' : `Every ${n} stints` }))} value={tireEvery} onChange={setTireEvery} />
         </Field>
-        <Field label="Stints per driver">
+        <Field group label="Stints per driver">
           <Seg options={[1, 2, 3].map((n) => ({ value: n, label: String(n) }))} value={block} onChange={setBlock} />
         </Field>
-        <Field label="Mode" className="span-2">
+        <Field group label="Mode" className="span-2">
           <Seg options={MODE_OPTIONS} value={mode} onChange={setMode} />
         </Field>
-        <Field label="Driver order" className="span-2">
+        <Field group label="Driver order" className="span-2">
           <div className="col gap-4">
             {ordered.map((id, i) => (
               <div key={id} className="row gap-4">

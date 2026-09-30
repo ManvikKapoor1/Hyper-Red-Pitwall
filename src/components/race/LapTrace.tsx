@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { formatDelta, formatLapMs } from '../../engine/format';
 import { lapTrace, sliceTrace, type TracePoint, type TraceRange } from '../../engine/trace';
 import type { CarEntry, Race } from '../../engine/types';
@@ -33,7 +33,7 @@ function stintLines(pts: TracePoint[]) {
 }
 
 /** Lap time, fuel/lap and energy/lap vs. the plan assumption — three charts, one axis each. */
-export function LapTracePanel({ race, car, className = '' }: { race: Race; car: CarEntry; className?: string }) {
+export const LapTracePanel = memo(function LapTracePanel({ race, car, className = '' }: { race: Race; car: CarEntry; className?: string }) {
   const u = useUnits();
   const [range, setRange] = useState<TraceRange>('last30');
   const trace = useMemo(() => lapTrace(car, race.events), [car, race.events]);
@@ -150,10 +150,10 @@ export function LapTracePanel({ race, car, className = '' }: { race: Race; car: 
       </div>
     </Panel>
   );
-}
+});
 
 /** Table twin of the lap trace — the last laps as entered. */
-export function RecentLaps({ car, className = '' }: { car: CarEntry; className?: string }) {
+export const RecentLaps = memo(function RecentLaps({ car, className = '' }: { car: CarEntry; className?: string }) {
   const u = useUnits();
   const laps = car.live.laps.slice(-40).reverse();
   return (
@@ -190,4 +190,4 @@ export function RecentLaps({ car, className = '' }: { car: CarEntry; className?:
       )}
     </Panel>
   );
-}
+});

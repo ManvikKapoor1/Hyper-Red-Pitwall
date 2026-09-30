@@ -14,13 +14,15 @@ import {
   startRaceLive,
   type PitStopInput,
 } from '../engine/liveOps';
-import { clonePlan, makeStint, uid } from '../engine/planner';
+import { adoptMeasured, assumptionRows, type AssumptionKey } from '../engine/assumptions';
+import { clonePlan, makeStint, renameCompoundInPlan, uid } from '../engine/planner';
 import type { QuickUpdateInput } from '../engine/validate';
 import type {
   CallLogEntry,
   CallPriority,
   CallStatus,
   CarEntry,
+  CarLive,
   CarSetup,
   Driver,
   DriveMode,
@@ -91,6 +93,8 @@ export interface AppState {
   updateCarMeta: (raceId: string, carId: string, patch: Partial<Pick<CarEntry, 'number' | 'teamName'>>) => void;
 
   updateSetup: (raceId: string, carId: string, patch: Partial<CarSetup>) => void;
+  renameCompound: (raceId: string, carId: string, from: string, to: string) => void;
+  adoptAssumption: (raceId: string, carId: string, key: AssumptionKey) => void;
   addDriver: (raceId: string, carId: string) => void;
   updateDriver: (raceId: string, carId: string, driverId: string, patch: Partial<Driver>) => void;
   removeDriver: (raceId: string, carId: string, driverId: string) => void;
@@ -265,6 +269,29 @@ export const useStore = create<AppState>()(
         updateCarMeta: (raceId, carId, patch) => mapRaceCar(raceId, carId, (c) => ({ ...c, ...patch })),
 
         updateSetup: (raceId, carId, patch) => mapRaceCar(raceId, carId, (c) => ({ ...c, setup: { ...c.setup, ...patch }, planDirty: true })),
+        renameCompound: (raceId, carId, from, to) =>
+          mapRaceCar(raceId, carId, (c) => {
+            if (!to || from === to || c.setup.compounds.some((x) => x.name === to)) return c;
+            const rn = (n: string) => (n === from ? to : n);
+            return {
+              ...c,
+              setup: { ...c.setup, compounds: c.setup.compounds.map((x) => (x.name === from ? { ...x, name: to } : x)) },
+              plan: renameCompoundInPlan(c.plan, from, to),
+              planDirty: true,
+              live: { ...c.live, compound: rn(c.live.compound), laps: c.live.laps.map((l) => (l.compound === from ? { ...l, compound: to } : l)), stops: c.live.stops.map((s) => (s.compound === from ? { ...s, compound: to } : s)) },
+            };
+          }),
+        adoptAssumption: (raceId, carId, key) => {
+          let label = '';
+          mapRaceCar(raceId, carId, (c, r) => {
+            const row = assumptionRows(c, r.events).find((x) => x.key === key);
+            const a = row && adoptMeasured(c, row);
+            if (!a) return c;
+            label = row.label;
+            return { ...c, setup: { ...c.setup, ...a.setup }, drivers: a.drivers, planDirty: true };
+          });
+          if (label) get().toast(`${label} set to the measured value — plan recalculated`, 'ok');
+        },
         addDriver: (raceId, carId) =>
           mapRaceCar(raceId, carId, (c) => {
             const i = c.drivers.length;
@@ -437,9 +464,9 @@ export const useStore = create<AppState>()(
         setCallStatus: (raceId, carId, callId, status) =>
           mapRaceCar(raceId, carId, (c) => ({ ...c, live: { ...c.live, calls: c.live.calls.map((x) => (x.id === callId ? { ...x, status } : x)) } })),
         editLap: (raceId, carId, lap, patch) =>
-          mapRaceCar(raceId, carId, (c) => ({ ...c, live: { ...c.live, laps: c.live.laps.map((l) => (l.lap === lap ? { ...l, ...patch, estimated: false } : l)) } })),
+          mapRaceCar(raceId, carId, (c) => ({ ...c, live: withLapStats({ ...c.live, laps: c.live.laps.map((l) => (l.lap === lap ? { ...l, ...patch, estimated: false } : l)) }, lap === c.live.lapsCompleted ? patch : {}) })),
         deleteLap: (raceId, carId, lap) =>
-          mapRaceCar(raceId, carId, (c) => ({ ...c, live: { ...c.live, laps: c.live.laps.filter((l) => l.lap !== lap) } })),
+          mapRaceCar(raceId, carId, (c) => ({ ...c, live: withLapStats({ ...c.live, laps: c.live.laps.filter((l) => l.lap !== lap) }, {}) })),
 
         triggerEvent: (raceId, ev) => {
           const id = uid('ev');
@@ -512,8 +539,14 @@ export const useStore = create<AppState>()(
         updateSettings: (patch) => set((s) => ({ settings: deepMerge(s.settings, patch) })),
         importAll: (data) => {
           const d = data as Partial<AppState>;
-          if (!d || !Array.isArray(d.races)) return false;
-          set((s) => ({ races: d.races!, settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings, library: d.library ?? s.library, activeRaceId: d.races![0]?.id ?? null, seeded: true }));
+          if (!d || !Array.isArray(d.races) || !d.races.every(isRaceLike)) return false;
+          const lib = (d.library ?? {}) as Partial<Library>;
+          const library: Library = {
+            strategies: Array.isArray(lib.strategies) ? lib.strategies : [],
+            tracks: Array.isArray(lib.tracks) ? lib.tracks : [],
+            teams: Array.isArray(lib.teams) ? lib.teams : [],
+          };
+          set((s) => ({ races: d.races!, settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings, library, activeRaceId: d.races![0]?.id ?? null, seeded: true }));
           return true;
         },
         resetAll: () => {
@@ -552,4 +585,29 @@ function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
     out = mapCar(out, c0.id, () => c);
   }
   return out;
+}
+
+/** Minimal structural check so a bad import cannot brick the app on reload. */
+function isRaceLike(r: unknown): r is Race {
+  const x = r as Race;
+  return (
+    !!x &&
+    typeof x.id === 'string' &&
+    !!x.params &&
+    typeof x.params.name === 'string' &&
+    typeof x.params.startTimeISO === 'string' &&
+    Array.isArray(x.cars) &&
+    x.cars.length > 0 &&
+    x.cars.every((c) => !!c && !!c.setup && Array.isArray(c.setup.compounds) && !!c.plan && Array.isArray(c.plan.stints) && Array.isArray(c.drivers) && !!c.live && Array.isArray(c.live.laps)) &&
+    Array.isArray(x.events) &&
+    !!x.clock
+  );
+}
+
+/** Keep last / best lap (and the current tire age) consistent after a manual lap correction. */
+function withLapStats(live: CarLive, latestPatch: Partial<LapRecord>): CarLive {
+  const last = live.laps[live.laps.length - 1];
+  const green = live.laps.filter((l) => !l.pitIn && !l.event && l.lap > 1);
+  const best = green.length ? Math.min(...green.map((l) => l.lapMs)) : null;
+  return { ...live, lastLapMs: last?.lapMs ?? null, bestLapMs: best, tireAge: latestPatch.tireAge ?? live.tireAge };
 }

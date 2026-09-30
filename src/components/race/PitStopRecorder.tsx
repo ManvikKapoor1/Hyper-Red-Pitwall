@@ -49,6 +49,8 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
                 toDriverId: driver,
                 stationarySec: stat,
                 totalLossSec: tot,
+                stationaryTimed: stationary != null,
+                totalTimed: total != null,
                 note,
                 underEvent: ev?.type,
               });

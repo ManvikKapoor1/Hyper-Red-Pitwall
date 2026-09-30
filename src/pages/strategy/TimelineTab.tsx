@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { actualStints } from '../../engine/analysis';
 import { formatDelta, formatLapMs } from '../../engine/format';
-import { blocksFromResult, StrategyTimeline, type TLBlock, type TLStop } from '../../components/race/StrategyTimeline';
+import { blocksFromActual, blocksFromResult, StrategyTimeline } from '../../components/race/StrategyTimeline';
 import { Panel, Seg } from '../../components/ui';
 import { useUnits } from '../../lib/units';
 import { DriverChip, type TabProps } from './shared';
@@ -13,24 +13,7 @@ export function TimelineTab({ race, car, res }: TabProps) {
   const plan = blocksFromResult(res);
   const done = useMemo(() => actualStints(car), [car]);
   const hasActual = done.length > 0;
-  const actual = useMemo(() => {
-    if (!hasActual) return undefined;
-    const blocks: TLBlock[] = done.map((s) => ({
-      index: s.index,
-      driverId: s.driverId,
-      startLap: s.startLap,
-      endLap: s.endLap,
-      startSec: s.startSec,
-      endSec: s.endSec,
-      kind: s.index === car.live.stintIndex && car.live.phase === 'racing' ? 'current' : 'done',
-      compound: s.compound,
-      newTires: false,
-      final: false,
-      laps: s.laps,
-    }));
-    const stops: TLStop[] = car.live.stops.map((s) => ({ lap: s.lap, sec: s.raceTimeSec, fuel: s.fuelAddedL > 0.05, tires: s.changeTires, driver: s.fromDriverId !== s.toDriverId, kind: 'done', label: `PIT ${s.index + 1} · L${s.lap}` }));
-    return { blocks, stops };
-  }, [done, car.live, hasActual]);
+  const actual = useMemo(() => (hasActual ? blocksFromActual(car) : undefined), [car, hasActual]);
   const nowLap = car.live.phase === 'racing' ? car.live.lapsCompleted + 1 : undefined;
   return (
     <div className="col gap-8">

@@ -160,10 +160,11 @@ export function RaceStatePanel({ race, car, p, onRecordStop }: { race: Race; car
 const LAST_N = [3, 5, 8, 10];
 
 /** Consumption method picker — one compact select (lives in the Fuel panel header). */
-function FuelMethodSelect({ race, car }: { race: Race; car: CarEntry }) {
+function FuelMethodSelect({ race, car, current }: { race: Race; car: CarEntry; current: number }) {
   const setFuelMethod = useStore((s) => s.setFuelMethod);
   const { live } = car;
   const value = live.fuelMethod === 'lastN' ? `lastN:${live.lastN}` : live.fuelMethod;
+  const windows = [...new Set([...LAST_N, live.lastN])].sort((a, b) => a - b);
   return (
     <select
       className="select xs"
@@ -172,10 +173,12 @@ function FuelMethodSelect({ race, car }: { race: Race; car: CarEntry }) {
       aria-label="Fuel consumption method"
       onChange={(e) => {
         const [m, n] = e.target.value.split(':');
-        setFuelMethod(race.id, car.id, m as FuelMethod, n ? Number(n) : undefined);
+        // switching to a user value starts from the rate in use now, so projections do not jump
+        const user = m === 'user' && live.userFuelPerLapL == null ? current : undefined;
+        setFuelMethod(race.id, car.id, m as FuelMethod, n ? Number(n) : undefined, user);
       }}
     >
-      {LAST_N.map((n) => (
+      {windows.map((n) => (
         <option key={n} value={`lastN:${n}`}>
           Last {n} laps
         </option>
@@ -198,7 +201,7 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
       title={<span className="label"><IconFuel size={11} /> Fuel</span>}
       meta={
         <>
-          <FuelMethodSelect race={race} car={car} />
+          <FuelMethodSelect race={race} car={car} current={p.fuelRate.value} />
           <ConfidenceBadge c={p.fuelRate.confidence} basis={p.fuelRate.source} />
         </>
       }
@@ -209,7 +212,7 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
         {live.fuelMethod === 'user' ? (
           <div className="stat right" style={{ width: 96 }}>
             <span className="k">Per lap (user)</span>
-            <NumInput size="sm" value={live.userFuelPerLapL ?? setup.fuelPerLapL} decimals={2} step={0.01} unit={`${u.fuelUnit}`} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, v)} />
+            <NumInput size="sm" value={u.fuelVal(live.userFuelPerLapL ?? p.fuelRate.value)} decimals={u.fuelUnit === 'gal' ? 3 : 2} step={0.01} unit={u.fuelUnit} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, u.fuelFromDisplay(v))} />
           </div>
         ) : (
           <Stat k="Per lap" v={u.fpl(p.fuelRate.value)} u={`${u.fuelUnit}/lap`} className="right" h={p.fuelRate.measured ? <span className="tag-measured">MEASURED</span> : <span className="tag-assumption">ESTIMATE</span>} />

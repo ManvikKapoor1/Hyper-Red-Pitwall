@@ -1362,6 +1362,9 @@ body.focus-mode .sidebar {
   min-height: 0;
   min-width: 0;
 }
+.lap-trace .lc {
+  min-height: 140px;
+}
 .lt-h {
   display: flex;
   align-items: baseline;

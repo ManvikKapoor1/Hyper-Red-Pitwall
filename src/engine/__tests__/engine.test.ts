@@ -4,7 +4,7 @@ import { generateRaceCalls } from '../calls';
 import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
 import { calculateFuelRemainingLaps, calculatePitLoss } from '../model';
-import { assumptionRows, driverStats } from '../assumptions';
+import { adoptMeasured, assumptionRows, driverStats } from '../assumptions';
 import { calculateStrategy } from '../simulate';
 import { withTirePattern } from '../planner';
 import { lapTrace, sliceTrace } from '../trace';
@@ -109,18 +109,28 @@ describe('what-if', () => {
 describe('assumptions', () => {
   const race = createDemoRace();
   const car = race.cars[0];
-  test('measured values come from recorded laps and stops only', () => {
-    const rows = assumptionRows(car);
-    const fuel = rows.find((r) => r.key === 'fuelPerLapL')!;
-    expect(fuel.measured).not.toBeNull();
-    expect(fuel.samples).toBeGreaterThan(10);
-    expect(fuel.adopt).toEqual({ fuelPerLapL: fuel.measured });
-    const lane = rows.find((r) => r.key === 'pitLaneLossSec')!;
-    expect(lane.samples).toBeLessThanOrEqual(car.live.stops.length);
+  const rows = assumptionRows(car, race.events);
+  const row = (k: string) => rows.find((r) => r.key === k)!;
+  test('measured values come from recorded green laps', () => {
+    expect(row('fuelPerLapL').measured).not.toBeNull();
+    expect(row('fuelPerLapL').samples).toBeGreaterThan(10);
   });
-  test('an empty race measures nothing', () => {
-    const empty = { ...car, live: { ...car.live, laps: [], stops: [] } };
-    expect(assumptionRows(empty).every((r) => r.measured === null && r.adopt === undefined)).toBe(true);
+  test('adopting a measured value is idempotent and keeps driver offsets', () => {
+    for (const key of ['fuelPerLapL', 'racePaceMs'] as const) {
+      const a = adoptMeasured(car, row(key))!;
+      const next = { ...car, setup: { ...car.setup, ...a.setup }, drivers: a.drivers };
+      const again = assumptionRows(next, race.events).find((r) => r.key === key)!;
+      expect(again.measured! / again.entered).toBeCloseTo(1, 3);
+    }
+    const a = adoptMeasured(car, row('racePaceMs'))!;
+    const delta = a.setup.racePaceMs! - car.setup.racePaceMs;
+    expect(a.drivers[0].paceMs! - car.drivers[0].paceMs!).toBe(delta);
+  });
+  test('stop timings only count when they were entered', () => {
+    const untimed = { ...car, live: { ...car.live, stops: car.live.stops.map((s) => ({ ...s, stationaryTimed: false, totalTimed: false })) } };
+    const r = assumptionRows(untimed, race.events).find((x) => x.key === 'pitLaneLossSec')!;
+    expect(r.measured).toBeNull();
+    expect(adoptMeasured(untimed, r)).toBeNull();
   });
   test('driver stats cover every driver', () => {
     const st = driverStats(car);

@@ -189,6 +189,8 @@ export interface PitStopInput {
   note?: string;
   underEvent?: ActualStop['underEvent'];
   inLapMs?: number;
+  stationaryTimed?: boolean;
+  totalTimed?: boolean;
 }
 
 export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number, settings: Settings): CarLive {
@@ -240,6 +242,8 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
     totalLossSec: input.totalLossSec,
     underEvent: input.underEvent,
     note: input.note,
+    stationaryTimed: input.stationaryTimed,
+    totalTimed: input.totalTimed,
   };
   live.stops.push(stop);
   live.fuelL = Math.min(car.setup.fuelCapacityL, live.fuelL + stop.fuelAddedL);
