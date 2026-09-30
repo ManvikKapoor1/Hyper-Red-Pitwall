@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import type { AlertItem } from '../../engine/calls';
 import { formatClock, formatDelta, formatDurationShort, wallClock } from '../../engine/format';
 import { RACE_STATES, type LiveProjection } from '../../engine/live';
@@ -158,18 +157,63 @@ export function RaceStatePanel({ race, car, p, onRecordStop }: { race: Race; car
   );
 }
 
+const LAST_N = [3, 5, 8, 10];
+
+/** Consumption method picker — one compact select (lives in the Fuel panel header). */
+function FuelMethodSelect({ race, car }: { race: Race; car: CarEntry }) {
+  const setFuelMethod = useStore((s) => s.setFuelMethod);
+  const { live } = car;
+  const value = live.fuelMethod === 'lastN' ? `lastN:${live.lastN}` : live.fuelMethod;
+  return (
+    <select
+      className="select xs"
+      value={value}
+      title="Consumption calculation method"
+      aria-label="Fuel consumption method"
+      onChange={(e) => {
+        const [m, n] = e.target.value.split(':');
+        setFuelMethod(race.id, car.id, m as FuelMethod, n ? Number(n) : undefined);
+      }}
+    >
+      {LAST_N.map((n) => (
+        <option key={n} value={`lastN:${n}`}>
+          Last {n} laps
+        </option>
+      ))}
+      <option value="stint">Stint avg</option>
+      <option value="race">Race avg</option>
+      <option value="user">User value</option>
+    </select>
+  );
+}
+
 export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveProjection }) {
   const u = useUnits();
   const setFuelMethod = useStore((s) => s.setFuelMethod);
   const { live, setup } = car;
-  const [userV, setUserV] = useState<number | null>(live.userFuelPerLapL ?? setup.fuelPerLapL);
   const margin = p.isFinalStint ? (p.current?.fuelMarginLaps ?? 0) : p.fuelAtPitLaps;
   const mColor = margin < 1 ? 'red' : margin < 2 ? 'amber' : 'green';
   return (
-    <Panel title={<span className="label"><IconFuel size={11} /> Fuel</span>} meta={<ConfidenceBadge c={p.fuelRate.confidence} basis={p.fuelRate.source} />} className="kpi">
+    <Panel
+      title={<span className="label"><IconFuel size={11} /> Fuel</span>}
+      meta={
+        <>
+          <FuelMethodSelect race={race} car={car} />
+          <ConfidenceBadge c={p.fuelRate.confidence} basis={p.fuelRate.source} />
+        </>
+      }
+      className="kpi"
+    >
       <div className="row between">
         <Stat k="Remaining" v={u.fuel(live.fuelL)} u={u.fuelUnit} size="lg" />
-        <Stat k="Per lap" v={u.fpl(p.fuelRate.value)} u={`${u.fuelUnit}/lap`} className="right" h={p.fuelRate.measured ? <span className="tag-measured">MEASURED</span> : <span className="tag-assumption">ESTIMATE</span>} />
+        {live.fuelMethod === 'user' ? (
+          <div className="stat right" style={{ width: 96 }}>
+            <span className="k">Per lap (user)</span>
+            <NumInput size="sm" value={live.userFuelPerLapL ?? setup.fuelPerLapL} decimals={2} step={0.01} unit={`${u.fuelUnit}`} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, v)} />
+          </div>
+        ) : (
+          <Stat k="Per lap" v={u.fpl(p.fuelRate.value)} u={`${u.fuelUnit}/lap`} className="right" h={p.fuelRate.measured ? <span className="tag-measured">MEASURED</span> : <span className="tag-assumption">ESTIMATE</span>} />
+        )}
       </div>
       <div className="kv mt-8">
         <span className="k">Theoretical</span>
@@ -189,28 +233,6 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
         <span className="v">
           {u.fuel(p.fuelToFinishRaceL, 0)} {u.fuelUnit}
         </span>
-      </div>
-      <div className="row mt-8 wrap gap-4">
-        <select className="select sm grow" value={live.fuelMethod} onChange={(e) => setFuelMethod(race.id, car.id, e.target.value as FuelMethod)} title="Consumption calculation method">
-          <option value="lastN">Last {live.lastN} laps</option>
-          <option value="stint">Current stint avg</option>
-          <option value="race">Race average</option>
-          <option value="user">User-defined</option>
-        </select>
-        {live.fuelMethod === 'user' && (
-          <span style={{ width: 86 }}>
-            <NumInput size="sm" value={userV} decimals={2} step={0.01} unit={u.fuelUnit} onChange={(v) => { setUserV(v); setFuelMethod(race.id, car.id, 'user', undefined, v); }} />
-          </span>
-        )}
-        {live.fuelMethod === 'lastN' && (
-          <select className="select sm" style={{ width: 58 }} value={live.lastN} onChange={(e) => setFuelMethod(race.id, car.id, 'lastN', Number(e.target.value))} title="Window size">
-            {[3, 5, 8, 10].map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        )}
       </div>
     </Panel>
   );

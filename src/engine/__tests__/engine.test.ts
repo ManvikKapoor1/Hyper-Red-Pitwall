@@ -5,6 +5,7 @@ import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
 import { calculateFuelRemainingLaps, calculatePitLoss } from '../model';
 import { calculateStrategy } from '../simulate';
+import { lapTrace, sliceTrace } from '../trace';
 import { validateRaceData } from '../validate';
 import { formatClock, formatLapMs, parseLapTime } from '../format';
 
@@ -56,5 +57,26 @@ describe('strategy & live', () => {
     expect(codes).toContain('LAP_DECREASED');
     expect(codes).toContain('FUEL_INCREASED');
     expect(codes).toContain('TIRE_AGE_DECREASED');
+  });
+});
+
+describe('lap trace', () => {
+  const race = createDemoRace();
+  const car = race.cars[0];
+  const trace = lapTrace(car, race.events);
+  test('pairs every recorded lap with a plan assumption', () => {
+    expect(trace).toHaveLength(car.live.laps.length);
+    for (const t of trace) {
+      expect(t.assumedLapMs).toBeGreaterThan(0);
+      expect(t.assumedFuelL).toBeGreaterThan(0);
+    }
+  });
+  test('pit and scenario laps are not green', () => {
+    const pit = trace.find((t) => t.pitIn);
+    expect(pit?.green).toBe(false);
+  });
+  test('slices by stint and window', () => {
+    expect(sliceTrace(trace, 'last30', car.live.stintIndex).length).toBe(Math.min(30, trace.length));
+    expect(sliceTrace(trace, 'stint', car.live.stintIndex).every((t) => t.stint === car.live.stintIndex)).toBe(true);
   });
 });

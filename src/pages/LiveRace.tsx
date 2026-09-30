@@ -4,6 +4,7 @@ import { deriveAlerts } from '../engine/calls';
 import { formatClock } from '../engine/format';
 import { TEMPLATE_LABEL } from '../engine/model';
 import { AlertPanel, CurrentStintCard, EnergyCard, FuelCard, PaceCard, PitWindowCard, RaceCallHistory, RaceStatePanel, TireCard, UpcomingCalls } from '../components/race/LiveCards';
+import { LapTracePanel, RecentLaps } from '../components/race/LapTrace';
 import { PitStopRecorder } from '../components/race/PitStopRecorder';
 import { QuickUpdatePanel } from '../components/race/QuickUpdatePanel';
 import { OverrideModal, RaceCallCard, useApplyCall } from '../components/race/RaceCallCard';
@@ -75,6 +76,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         <CurrentStintCard race={race} car={car} p={p} />
         <RaceStatePanel race={race} car={car} p={p} onRecordStop={() => setStop({})} />
         <QuickUpdatePanel race={race} car={car} nowSec={nowSec} onRecordStop={(pre) => setStop(pre ?? {})} />
+        <RecentLaps car={car} />
       </div>
       <div className="live-center">
         <Panel
@@ -94,53 +96,58 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         >
           <StrategyTimeline car={car} blocks={tl.blocks} stops={tl.stops} totalLaps={Math.max(p.totalLaps, car.live.lapsCompleted)} totalSec={Math.max(p.finishSec, race.params.durationSec)} nowLap={car.live.phase === 'racing' ? p.currentLap : undefined} events={race.events} calls={car.live.calls} versions={car.versions} compact={false} zoomable />
         </Panel>
-        <div className="live-mid">
-          <Panel title="Upcoming stints" className="live-next" bodyClass="flush" meta={<Link className="btn xs ghost" to={`/app/race/${race.id}/strategy/stints`}>Stint planner</Link>}>
-            <table className="table compact">
-              <thead>
-                <tr>
-                  <th>Stint</th>
-                  <th>Driver</th>
-                  <th className="n">Laps</th>
-                  <th className="n">In-lap</th>
-                  <th>Stop before</th>
-                  <th className="n">Fuel +</th>
-                  <th className="n">Margin</th>
+        <Panel title="Upcoming stints" className="live-next" bodyClass="flush" meta={<Link className="btn xs ghost" to={`/app/race/${race.id}/strategy/stints`}>Stint planner</Link>}>
+          <table className="table compact">
+            <thead>
+              <tr>
+                <th>Stint</th>
+                <th>Driver</th>
+                <th className="n">Laps</th>
+                <th className="n">In-lap</th>
+                <th>Stop before</th>
+                <th>Tires</th>
+                <th className="n">Fuel +</th>
+                <th className="n">Fuel margin</th>
+                {car.setup.energyEnabled && <th className="n">Energy margin</th>}
+                <th>Pit flag</th>
+              </tr>
+            </thead>
+            <tbody>
+              {p.current && (
+                <tr className="cur">
+                  <td className="mono">S{p.current.index + 1}</td>
+                  <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, p.current.driverId)}</td>
+                  <td className="n">{p.current.laps}</td>
+                  <td className="n">{p.current.final ? 'FLAG' : p.current.endLap}</td>
+                  <td className="dim">NOW</td>
+                  <td>{p.current.compound}</td>
+                  <td className="n dim">—</td>
+                  <td className={`n ${marginClass(p.current.fuelMarginLaps)}`}>{u.n(p.current.fuelMarginLaps, 1)}</td>
+                  {car.setup.energyEnabled && <td className={`n ${marginClass(p.current.energyMarginLaps)}`}>{u.n(p.current.energyMarginLaps, 1)}</td>}
+                  <td className="dim">{p.current.final ? 'FINAL' : p.current.flag}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {p.current && (
-                  <tr className="cur">
-                    <td className="mono">S{p.current.index + 1}</td>
-                    <td className="ellipsis" style={{ maxWidth: 110 }}>{driverName(car, p.current.driverId)}</td>
-                    <td className="n">{p.current.laps}</td>
-                    <td className="n">{p.current.final ? 'FLAG' : p.current.endLap}</td>
-                    <td className="dim">NOW</td>
-                    <td className="n dim">—</td>
-                    <td className={`n ${p.current.fuelMarginLaps < 1 ? 'c-amber' : ''}`}>{u.n(p.current.fuelMarginLaps, 1)}</td>
+              )}
+              {nextStints.map((s, i) => {
+                const stp = p.sim.stops[i];
+                return (
+                  <tr key={s.index}>
+                    <td className="mono">S{s.index + 1}</td>
+                    <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, s.driverId)}</td>
+                    <td className="n">{s.laps}</td>
+                    <td className="n">{s.final ? 'FLAG' : s.endLap}</td>
+                    <td className="ellipsis" style={{ maxWidth: 170 }}>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
+                    <td className={s.newTires ? '' : 'dim'}>{s.newTires ? `NEW ${s.compound}` : `${s.compound} +${s.tireAgeStart}`}</td>
+                    <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
+                    <td className={`n ${marginClass(s.fuelMarginLaps)}`}>{u.n(s.fuelMarginLaps, 1)}</td>
+                    {car.setup.energyEnabled && <td className={`n ${marginClass(s.energyMarginLaps)}`}>{u.n(s.energyMarginLaps, 1)}</td>}
+                    <td className="dim">{s.final ? 'FINAL' : s.flag}</td>
                   </tr>
-                )}
-                {nextStints.map((s, i) => {
-                  const stp = p.sim.stops[i];
-                  return (
-                    <tr key={s.index}>
-                      <td className="mono">S{s.index + 1}</td>
-                      <td className="ellipsis" style={{ maxWidth: 110 }}>{driverName(car, s.driverId)}</td>
-                      <td className="n">{s.laps}</td>
-                      <td className="n">{s.final ? 'FLAG' : s.endLap}</td>
-                      <td className="ellipsis" style={{ maxWidth: 150 }}>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
-                      <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
-                      <td className={`n ${s.fuelMarginLaps < 0 ? 'c-red' : s.fuelMarginLaps < 1 ? 'c-amber' : ''}`}>{u.n(s.fuelMarginLaps, 1)}</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </Panel>
-          <Panel title="Call queue" className="live-queue" meta={<span className="sublabel">{rest.length}</span>} scroll>
-            <UpcomingCalls calls={rest} />
-          </Panel>
-        </div>
+                );
+              })}
+            </tbody>
+          </table>
+        </Panel>
+        <LapTracePanel race={race} car={car} />
         <Panel className="live-scen" bodyClass="tight">
           <ScenarioPanel race={race} car={car} p={p} nowSec={nowSec} />
           <AlertPanel alerts={alerts} />
@@ -149,6 +156,9 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
       <div className="live-right">
         <RaceCallCard race={race} car={car} p={p} call={top} onOverride={() => setOverride(true)} />
         <PitWindowCard race={race} car={car} p={p} nowSec={nowSec} onOverride={() => setOverride(true)} />
+        <Panel title="Call queue" className="live-queue" meta={<span className="sublabel">{rest.length}</span>} scroll>
+          <UpcomingCalls calls={rest} />
+        </Panel>
       </div>
       <div className="live-bottom">
         <FuelCard race={race} car={car} p={p} />
@@ -163,4 +173,8 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
       {stop && <PitStopRecorder race={race} car={car} p={p} nowSec={nowSec} prefill={stop} onClose={() => setStop(null)} />}
     </div>
   );
+}
+
+function marginClass(laps: number) {
+  return laps < 0 ? 'c-red' : laps < 1 ? 'c-amber' : '';
 }
