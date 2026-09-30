@@ -58,11 +58,11 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
       l: () => race.isDemo && demoAdvance(race.id, 1),
       ' ': () => car.live.phase === 'racing' && setClockRunning(race.id, !race.clock.running),
       c: () => {
-        if (!top) return;
+        if (!top || car.live.phase === 'finished') return;
         logCall(race.id, car.id, top.text, top.priority, top.reasons.join(' · '), 'ISSUED', 'system');
         apply(top.action, `Call accepted: ${top.text}`);
       },
-      o: () => setOverride(true),
+      o: () => car.live.phase !== 'finished' && setOverride(true),
       p: () => car.live.phase === 'racing' && setStop({}),
       f: () => setFocus((f) => !f),
     },

@@ -142,7 +142,7 @@ export function QuickUpdatePanel({ race, car, nowSec, onRecordStop }: { race: Ra
     }
     setErr(null);
     if (Object.keys(input).length === 0) return;
-    const warnings = validateRaceData(car, input, settings);
+    const warnings = validateRaceData(car, input, settings, race.events);
     if (warnings.length) {
       setPending({ input, warnings });
       return;

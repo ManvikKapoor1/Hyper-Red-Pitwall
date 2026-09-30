@@ -69,7 +69,7 @@ export interface LiveProjection {
   totalStints: number;
   fuelRate: MeasuredRate;
   energyRate: MeasuredRate;
-  pace: { avgMs: number; lastMs: number | null; bestMs: number | null; biasMs: number; samples: number; predictedMs: number };
+  pace: { avgMs: number; lastMs: number | null; bestMs: number | null; biasMs: number; samples: number; modelMs: number; predictedMs: number };
   sim: StrategyResult;
   current?: SimStint;
   nextStint?: SimStint;
@@ -176,6 +176,16 @@ export function measureEnergyPerLap(car: CarEntry, settings: Settings): Measured
   return { value: mean * nowFactor, base: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
 }
 
+/**
+ * Expected green-flag time of the lap now being driven: the lap model for the
+ * current driver, mode, tire age and fuel load, corrected by how the timed
+ * green laps so far compared with the model. Falls back to the setup pace.
+ */
+export function referenceLapMs(car: CarEntry): number {
+  const ms = measurePace(car, 5).predictedMs;
+  return Number.isFinite(ms) && ms > 0 ? ms : car.setup.racePaceMs;
+}
+
 export function measurePace(car: CarEntry, lastN: number) {
   const { live, setup, drivers } = car;
   const g = greenLaps(live.laps).filter((l) => !l.estimated || live.laps.length < 3);
@@ -194,7 +204,10 @@ export function measurePace(car: CarEntry, lastN: number) {
       });
       return l.lapMs - pred;
     });
-    bias = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+    // median: one lap in traffic or an untagged caution lap does not move the pace
+    const d = diffs.sort((a, b) => a - b);
+    const m = d.length >> 1;
+    bias = d.length % 2 ? d[m] : (d[m - 1] + d[m]) / 2;
   }
   const avg = recent.length ? recent.reduce((a, l) => a + l.lapMs, 0) / recent.length : 0;
   const predictedMs = predictLapMs({
@@ -205,7 +218,7 @@ export function measurePace(car: CarEntry, lastN: number) {
     mode: live.driveMode,
     fuelL: live.fuelL,
   });
-  return { avgMs: avg, lastMs: live.lastLapMs, bestMs: live.bestLapMs, biasMs: bias, samples: recent.length, predictedMs: predictedMs + bias };
+  return { avgMs: avg, lastMs: live.lastLapMs, bestMs: live.bestLapMs, biasMs: bias, samples: recent.length, modelMs: predictedMs, predictedMs: predictedMs + bias };
 }
 
 export function deriveRaceState(race: Race, car: CarEntry, windowState: WindowState, nowSec: number): RaceStateName {
@@ -276,7 +289,9 @@ export function projectLive(race: Race, car: CarEntry, settings: Settings, nowSe
   const current = sim.stints[0];
   const nextStint = sim.stints[1];
   const nextStop = sim.stops[0];
-  const currentLap = racing ? live.lapsCompleted + 1 : 0;
+  // after the flag the last lap driven is the current one and nothing is left to plan
+  const finished = live.phase === 'finished';
+  const currentLap = finished ? live.lapsCompleted : racing ? live.lapsCompleted + 1 : 0;
   const isFinalStint = !nextStop;
 
   const liveFpl = fuelRate.value;
@@ -310,17 +325,17 @@ export function projectLive(race: Race, car: CarEntry, settings: Settings, nowSe
   const fuelAtPitLaps = liveFpl > 0 ? fuelAtPitL / liveFpl : Infinity;
   const energyAtPitPct = current ? current.energyEndPct : live.energyPct;
   const tireAgeAtPit = current ? current.tireAgeEnd : live.tireAge;
-  const fuelToFinishStintL = liveFpl * lapsInclCurrent;
-  const lapsToFinish = Math.max(0, sim.totalLaps - currentLap + 1);
+  const fuelToFinishStintL = finished ? 0 : liveFpl * lapsInclCurrent;
+  const lapsToFinish = finished ? 0 : Math.max(0, sim.totalLaps - currentLap + 1);
   const fuelToFinishRaceL = liveFpl * lapsToFinish;
 
   const reqFpl = requiredFuelPerLap(live.fuelL, lapsInclCurrent, setup.fuelSafetyMarginLaps, liveFpl);
-  const fuelSavePct = liveFpl > 0 && reqFpl < liveFpl ? (1 - reqFpl / liveFpl) * 100 : 0;
+  const fuelSavePct = !finished && liveFpl > 0 && reqFpl < liveFpl ? (1 - reqFpl / liveFpl) * 100 : 0;
   const reqEpl = setup.energyEnabled ? Math.max(0, live.energyPct - setup.energyReservePct) / lapsInclCurrent : Infinity;
-  const energySavePct = setup.energyEnabled && liveEpl > 0 && reqEpl < liveEpl ? (1 - reqEpl / liveEpl) * 100 : 0;
+  const energySavePct = !finished && setup.energyEnabled && liveEpl > 0 && reqEpl < liveEpl ? (1 - reqEpl / liveEpl) * 100 : 0;
   const planStint = plan.stints[live.stintIndex];
   let energyTargetPct: number | null = null;
-  if (setup.energyEnabled && racing) {
+  if (setup.energyEnabled && racing && !finished) {
     const stintLaps = Math.max(1, (current ? current.endLap : target) - live.stintStartLap + 1);
     const budget = planStint?.energyTargetPct ?? Math.max(0, live.stintStartEnergyPct - setup.energyReservePct);
     const doneLaps = Math.max(0, currentLap - live.stintStartLap);

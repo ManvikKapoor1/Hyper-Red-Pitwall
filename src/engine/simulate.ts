@@ -251,7 +251,8 @@ function simulateOnce(
   let energy = init?.energyPct ?? (setup.energyEnabled ? Math.min(setup.energyCapacityPct, plan.startEnergyPct) : 0);
   let compound = init?.compound ?? plan.startCompound;
   let tireAge = init?.tireAge ?? plan.startTireAge;
-  let finished = false;
+  // live projection after the chequered flag: nothing left to drive
+  let finished = lapsMode ? lap > lapsTarget : init != null && t >= race.durationSec;
   let fuelAddedTotal = 0;
   let tireSets = 1;
 
@@ -343,6 +344,9 @@ function simulateOnce(
       }
       fuel -= fpl;
       energy -= epl;
+      // rounding noise when a stint is sized to the last drop
+      if (Math.abs(fuel) < 1e-9) fuel = 0;
+      if (Math.abs(energy) < 1e-9) energy = 0;
       fuelUsed += fpl;
       energyUsed += epl;
       tireAge += 1;

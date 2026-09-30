@@ -8,9 +8,10 @@ import { describe, expect, test } from 'vitest';
 import { generateRaceCalls } from '../calls';
 import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
-import { applyQuickUpdate, prepareGrid, recordPitStop, startRaceLive } from '../liveOps';
+import { applyQuickUpdate, checkFlag, prepareGrid, recordPitStop, startRaceLive } from '../liveOps';
 import { calculateStrategy, type StrategyResult } from '../simulate';
 import type { CarEntry, Race } from '../types';
+import { validateRaceData, type QuickUpdateInput } from '../validate';
 import { checkResult, randomCase, type Case } from './helpers';
 
 const settings = DEFAULT_SETTINGS;
@@ -73,24 +74,29 @@ function playRace(c: Case, exact: boolean): RunReport {
       // the pitwall confirms the fuel it sees after the stop
       car.live = applyQuickUpdate(car, { fuelL: Math.max(0, lap.fuelAfterL) + stop.fuelAddedL }, lap.endSec, settings, race.events);
     } else {
-      car.live = applyQuickUpdate(
-        car,
-        {
-          lapsCompleted: lap.lap,
-          raceTimeSec: lap.endSec,
-          fuelL: lap.fuelAfterL,
-          energyPct: c.setup.energyEnabled ? lap.energyAfterPct : undefined,
-          tireAge: lap.tireAge,
-          lastLapMs: lap.lapMs,
-        },
-        lap.endSec,
-        settings,
-        race.events,
-      );
+      const input: QuickUpdateInput = {
+        lapsCompleted: lap.lap,
+        raceTimeSec: lap.endSec,
+        fuelL: lap.fuelAfterL,
+        energyPct: c.setup.energyEnabled ? lap.energyAfterPct : undefined,
+        tireAge: lap.tireAge,
+        lastLapMs: lap.lapMs,
+      };
+      // true numbers typed correctly must never be questioned
+      const warn = lap.fuelAfterL >= 0 && lap.energyAfterPct >= 0 ? validateRaceData(car, input, settings, race.events) : [];
+      if (warn.length) problems.push(`lap ${lap.lap}: false warning ${warn.map((x) => x.message).join(' / ')}`);
+      car.live = applyQuickUpdate(car, input, lap.endSec, settings, race.events);
     }
     steps++;
     const done = c.race.lengthMode === 'laps' ? lap.lap >= c.race.laps : lap.endSec >= c.race.durationSec;
-    if (done) break;
+    if (done) {
+      car.live = checkFlag(c.race, car.live);
+      if (car.live.phase !== 'finished') problems.push(`lap ${lap.lap}: flag not taken`);
+      const after = projectLive(race, car, settings, car.live.lastLapEndSec);
+      if (after.sim.laps.length) problems.push(`after flag: projection drives ${after.sim.laps.length} more laps`);
+      break;
+    }
+    if (checkFlag(c.race, car.live) !== car.live) problems.push(`lap ${lap.lap}: flag before the race end`);
     const p = projectLive(race, car, settings, car.live.lastLapEndSec);
     const where = `lap ${lap.lap}`;
     // the projection is a valid simulation from the live state

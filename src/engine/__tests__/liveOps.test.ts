@@ -1,7 +1,9 @@
 import { describe, expect, test } from 'vitest';
 import { createDemoRace } from '../../data/samples';
 import { DEFAULT_SETTINGS } from '../factory';
-import { applyQuickUpdate } from '../liveOps';
+import { measureFuelPerLap, projectLive, referenceLapMs } from '../live';
+import { applyQuickUpdate, checkFlag, recordPitStop } from '../liveOps';
+import { validateRaceData } from '../validate';
 
 const race = createDemoRace();
 const car = race.cars[0];
@@ -52,5 +54,86 @@ describe('quick update', () => {
     const live = applyQuickUpdate(car, { lapsCompleted: L.lapsCompleted + 1, fuelL: L.fuelL - 2.3, lastLapMs: 126000 }, L.lastLapEndSec + 126, DEFAULT_SETTINGS, [ev]);
     expect(live.laps[live.laps.length - 1].event).toBe('SAFETY_CAR');
     expect(live.bestLapMs).toBe(L.bestLapMs);
+  });
+});
+
+describe('input checks after stops and cautions', () => {
+  const green = referenceLapMs(car);
+  const ev = { id: 'e', type: 'SAFETY_CAR' as const, label: 'SC', startSec: L.lastLapEndSec, durationSec: 3 * (green / 1000 + 35) + 1, lapDeltaSec: 35, fuelReductionPct: 25, energyReductionPct: 20, pitOpen: true };
+  test('normal lap after a pit stop is not questioned', () => {
+    const live = recordPitStop(
+      car,
+      { inLap: L.lapsCompleted + 1, inLapMs: green + 62000, fuelAddedL: 40, changeTires: true, compound: car.live.compound, toDriverId: car.live.driverId, stationarySec: 40, totalLossSec: 62 },
+      L.lastLapEndSec + (green + 62000) / 1000,
+      DEFAULT_SETTINGS,
+    );
+    const c = { ...car, live };
+    const w = validateRaceData(c, { lapsCompleted: live.lapsCompleted + 1, raceTimeSec: live.lastLapEndSec + green / 1000, lastLapMs: green, tireAge: 1 }, DEFAULT_SETTINGS);
+    expect(w.map((x) => x.code)).toEqual([]);
+  });
+  test('laps under a safety car expect the caution pace and fuel', () => {
+    const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + green / 1000 + 35, lastLapMs: green + 35000 }, DEFAULT_SETTINGS, [ev]);
+    expect(w.map((x) => x.code)).toEqual([]);
+  });
+  test('green lap after safety-car laps is not questioned', () => {
+    let c = car;
+    let t = L.lastLapEndSec;
+    for (let k = 1; k <= 3; k++) {
+      t += green / 1000 + 35;
+      c = { ...c, live: applyQuickUpdate(c, { lapsCompleted: L.lapsCompleted + k, raceTimeSec: t, lastLapMs: green + 35000 }, t, DEFAULT_SETTINGS, [ev]) };
+    }
+    const w = validateRaceData(c, { lapsCompleted: L.lapsCompleted + 4, raceTimeSec: t + green / 1000, lastLapMs: green }, DEFAULT_SETTINGS, [ev]);
+    expect(w.map((x) => x.code)).toEqual([]);
+  });
+  test('first caution lap may still burn green-flag fuel', () => {
+    const rate = measureFuelPerLap(car, DEFAULT_SETTINGS).value;
+    const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + green / 1000, fuelL: L.fuelL - rate, lastLapMs: green }, DEFAULT_SETTINGS, [ev]);
+    expect(w.map((x) => x.code)).toEqual([]);
+    const typo = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, fuelL: L.fuelL - rate * 2 }, DEFAULT_SETTINGS, [ev]);
+    expect(typo.map((x) => x.code)).toContain('FUEL_RATE_CHANGE');
+  });
+  test('lap during which the caution ends is not questioned', () => {
+    const mixed = green + 20000;
+    const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + mixed / 1000, lastLapMs: mixed }, DEFAULT_SETTINGS, [{ ...ev, durationSec: 60 }]);
+    expect(w.map((x) => x.code)).toEqual([]);
+  });
+  test('normal pace after a few confirmed slow laps is not questioned', () => {
+    let c = car;
+    let t = L.lastLapEndSec;
+    for (let k = 1; k <= 3; k++) {
+      t += green / 1000 + 30;
+      c = { ...c, live: applyQuickUpdate(c, { lapsCompleted: L.lapsCompleted + k, raceTimeSec: t, lastLapMs: green + 30000 }, t, DEFAULT_SETTINGS) };
+    }
+    const w = validateRaceData(c, { lapsCompleted: L.lapsCompleted + 4, raceTimeSec: t + green / 1000, lastLapMs: green }, DEFAULT_SETTINGS);
+    expect(w.map((x) => x.code)).toEqual([]);
+  });
+  test('a mistyped lap time is still flagged', () => {
+    const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, lastLapMs: green + 60000 }, DEFAULT_SETTINGS);
+    expect(w.map((x) => x.code)).toContain('LAP_TIME_OUTLIER');
+  });
+});
+
+describe('chequered flag', () => {
+  test('timed race ends on the first lap completed after the clock', () => {
+    const params = { ...race.params, lengthMode: 'time' as const, durationSec: L.lastLapEndSec + 30 };
+    expect(checkFlag(params, L)).toBe(L);
+    const live = applyQuickUpdate(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + 96 }, L.lastLapEndSec + 96, DEFAULT_SETTINGS);
+    const done = checkFlag(params, live);
+    expect(done.phase).toBe('finished');
+    expect(done.calls[done.calls.length - 1].text).toBe('CHEQUERED FLAG');
+    // nothing left to drive in the projection
+    const p = projectLive({ ...race, params, cars: [{ ...car, live: done }] }, { ...car, live: done }, DEFAULT_SETTINGS, done.lastLapEndSec);
+    expect(p.sim.laps).toHaveLength(0);
+    expect(p.currentLap).toBe(done.lapsCompleted);
+    expect(p.fuelSavePct).toBe(0);
+    expect(p.energySavePct).toBe(0);
+    expect(p.fuelToFinishRaceL).toBe(0);
+  });
+  test('lap race ends on the last lap', () => {
+    const params = { ...race.params, lengthMode: 'laps' as const, laps: L.lapsCompleted + 2 };
+    const one = applyQuickUpdate(car, { lapsCompleted: L.lapsCompleted + 1 }, L.lastLapEndSec + 96, DEFAULT_SETTINGS);
+    expect(checkFlag(params, one).phase).toBe('racing');
+    const two = applyQuickUpdate({ ...car, live: one }, { lapsCompleted: L.lapsCompleted + 2 }, L.lastLapEndSec + 192, DEFAULT_SETTINGS);
+    expect(checkFlag(params, two).phase).toBe('finished');
   });
 });

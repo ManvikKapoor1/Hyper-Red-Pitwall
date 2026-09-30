@@ -7,6 +7,7 @@ import { fuelText } from '../engine/format';
 import { raceNowSec } from '../engine/live';
 import {
   applyQuickUpdate,
+  checkFlag,
   cloneLive,
   emptyLive,
   makeCall,
@@ -406,9 +407,10 @@ export const useStore = create<AppState>()(
             const lastEnd = out.cars.find((c) => c.id === carId)?.live.lastLapEndSec ?? 0;
             // keep the race clock from lagging behind recorded laps (e.g. paused clock)
             if (lastEnd > nowFor(out)) out.clock = { ...out.clock, anchorRaceSec: lastEnd, anchorEpochMs: Date.now() };
-            return out;
+            return settleFlag(out);
           });
-          get().toast('Race updated — projections recalculated', 'ok');
+          const done = get().races.find((x) => x.id === raceId)?.cars.find((c) => c.id === carId)?.live.phase === 'finished';
+          get().toast(done ? 'Chequered flag — race complete' : 'Race updated — projections recalculated', 'ok');
         },
         recordStop: (raceId, carId, input) => {
           const st = get().settings;
@@ -440,7 +442,7 @@ export const useStore = create<AppState>()(
               return { ...car, live };
             });
             if (lastEnd > now) out.clock = { ...out.clock, anchorRaceSec: lastEnd, anchorEpochMs: Date.now() };
-            return out;
+            return settleFlag(out);
           });
           get().toast('Pit stop recorded — new stint started', 'ok');
         },
@@ -571,6 +573,14 @@ export const useStore = create<AppState>()(
     },
   ),
 );
+
+/** Ends each car's race at the flag; the race finishes when every car has. */
+function settleFlag(r: Race): Race {
+  const cars = r.cars.map((c) => ({ ...c, live: checkFlag(r.params, c.live) }));
+  if (!cars.every((c) => c.live.phase === 'finished')) return { ...r, cars };
+  const end = Math.max(...cars.map((c) => c.live.lastLapEndSec));
+  return { ...r, cars, status: 'FINISHED', clock: { ...r.clock, running: false, anchorRaceSec: end, anchorEpochMs: Date.now() } };
+}
 
 function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
   let out = r;

@@ -2,12 +2,12 @@
  * Pure reducers for the live race state. The store calls these; they never
  * touch the UI and are easy to unit-test.
  */
-import { measureEnergyPerLap, measureFuelPerLap } from './live';
+import { measureEnergyPerLap, measureFuelPerLap, referenceLapMs } from './live';
 import { activeEventAt } from './model';
 import { uid } from './planner';
 import { calculateStrategy } from './simulate';
 import type { QuickUpdateInput } from './validate';
-import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, ScenarioEvent, Settings } from './types';
+import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, RaceParams, ScenarioEvent, Settings } from './types';
 
 export function cloneLive(live: CarLive): CarLive {
   return {
@@ -78,6 +78,25 @@ export function startRaceLive(live: CarLive): CarLive {
 }
 
 /**
+ * Chequered flag for this car: a timed race ends with the first lap completed
+ * after the clock runs out, a lap race when the car completes the last lap.
+ */
+export function flagFallen(params: RaceParams, live: CarLive): boolean {
+  if (live.phase !== 'racing' || live.lapsCompleted < 1) return false;
+  return params.lengthMode === 'laps' ? live.lapsCompleted >= params.laps : live.lastLapEndSec >= params.durationSec;
+}
+
+/** Ends the car's race when the flag has fallen (logs the chequered flag). */
+export function checkFlag(params: RaceParams, live: CarLive): CarLive {
+  if (!flagFallen(params, live)) return live;
+  const out = cloneLive(live);
+  out.phase = 'finished';
+  out.pitPhase = null;
+  out.calls.push(makeCall({ ...out, lapsCompleted: out.lapsCompleted - 1 }, out.lastLapEndSec, 'CHEQUERED FLAG', 'INFO', `Lap ${out.lapsCompleted} · ${params.lengthMode === 'laps' ? 'race distance completed' : 'first lap after the clock ran out'}`, 'LOGGED', 'event'));
+  return out;
+}
+
+/**
  * Apply a manual update. `events` tags laps driven under a safety car / slow
  * zone so they are left out of the green-flag consumption and pace averages.
  */
@@ -99,7 +118,7 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     fields.push('lap');
     const fuelRate = measureFuelPerLap(car, settings).value;
     const energyRate = measureEnergyPerLap(car, settings).value;
-    const expectedMs = live.lastLapMs && live.lastLapMs < car.setup.racePaceMs * 1.5 ? live.lastLapMs : car.setup.racePaceMs;
+    const expectedMs = referenceLapMs(car) + (activeEventAt(events, live.lastLapEndSec)?.lapDeltaSec ?? 0) * 1000;
     const clockEnd = input.raceTimeSec ?? nowSec;
     let totalMs = (clockEnd - live.lastLapEndSec) * 1000;
     const timeKnown = totalMs > expectedMs * delta * 0.5;
@@ -214,7 +233,7 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
   if (input.inLap === live.lapsCompleted + 1) {
     const fuelRate = measureFuelPerLap(car, settings).value;
     const energyRate = measureEnergyPerLap(car, settings).value;
-    const expected = (live.lastLapMs ?? car.setup.racePaceMs) + input.totalLossSec * 1000;
+    const expected = referenceLapMs(car) + input.totalLossSec * 1000;
     const measured = (nowSec - live.lastLapEndSec) * 1000;
     const lapMs = input.inLapMs ?? (measured > expected * 0.6 ? measured : expected);
     const endSec = live.lastLapEndSec + lapMs / 1000;
