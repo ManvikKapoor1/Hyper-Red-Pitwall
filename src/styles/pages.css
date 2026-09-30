@@ -231,3 +231,60 @@ ul.plain {
 .kv-grid {
   gap: 10px 28px;
 }
+
+/* ── dashboard ──────────────────────────────────────────────────────── */
+.dash-cols {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  align-items: start;
+}
+@media (max-width: 1100px) {
+  .dash-cols {
+    grid-template-columns: 1fr;
+  }
+}
+.race-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.race-card.is-live {
+  border-left: 3px solid var(--red);
+}
+.rc-title {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 21px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  line-height: 1.1;
+}
+.rc-title:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.rc-stats {
+  display: flex;
+  gap: 28px;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin: 2px 0;
+}
+.steps {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12.5px;
+  color: var(--text-2);
+}
+.steps b {
+  color: var(--text);
+}
