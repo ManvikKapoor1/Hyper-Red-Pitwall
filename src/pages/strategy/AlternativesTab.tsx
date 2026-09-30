@@ -3,6 +3,7 @@ import { compareStrategies, generateAlternatives, type StrategyTag } from '../..
 import { formatClock, formatDelta, formatLapMs } from '../../engine/format';
 import { blocksFromResult, StrategyTimeline } from '../../components/race/StrategyTimeline';
 import { Badge, Panel } from '../../components/ui';
+import { useLiveSim } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { marginClass } from '../../lib/margins';
@@ -16,26 +17,26 @@ const TAG_COLOR: Partial<Record<StrategyTag, 'blue' | 'amber'>> = {
 export function AlternativesTab({ race, car }: TabProps) {
   const u = useUnits();
   const setPlan = useStore((s) => s.setPlan);
-  const { setup, plan, drivers } = car;
-  const metrics = useMemo(() => {
-    const planCar = { ...car, setup, plan, drivers };
-    return compareStrategies(race.params, planCar, generateAlternatives({ race: race.params, car: planCar }));
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- live data does not affect pre-race alternatives
-  }, [race.params, setup, plan, drivers]);
+  const setPitOverride = useStore((s) => s.setPitOverride);
+  // live: options keep the stints driven so far and the current one, and are simulated from the live state
+  const sim = useLiveSim(race, car);
+  const live = !!sim;
+  const keepFirst = live ? Math.min(car.live.stintIndex + 1, car.plan.stints.length) : 0;
+  const metrics = useMemo(() => compareStrategies(race.params, car, generateAlternatives({ race: race.params, car, sim, keepFirst }), sim), [race.params, car, sim, keepFirst]);
   const [sel, setSel] = useState('current');
   const chosen = metrics.find((m) => m.option.id === sel) ?? metrics[0];
   const tl = blocksFromResult(chosen.result);
   return (
     <div className="col gap-8">
       <div className="notice">
-        Alternatives are generated from your plan and entered assumptions. STINT describes the consequences with neutral tags — it does not rank or pick a strategy. Δ time is measured over the current plan’s distance.
+        Alternatives are generated from your plan and entered assumptions{live ? ` — live: from lap ${car.live.lapsCompleted + 1} with the measured rates; stints already driven are kept` : ''}. STINT describes the consequences with neutral tags — it does not rank or pick a strategy. Δ time is measured over the current plan’s distance.
       </div>
       <Panel title="Compare" bodyClass="flush" className="scroll-x">
         <table className="table">
           <thead>
             <tr>
               <th>Strategy</th>
-              <th className="n">Stops</th>
+              <th className="n">{live ? 'Stops left' : 'Stops'}</th>
               <th className="n">Laps</th>
               <th className="n">Finish</th>
               <th className="n">Δ same distance</th>
@@ -79,7 +80,10 @@ export function AlternativesTab({ race, car }: TabProps) {
                       className="btn xs"
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (confirm(`Replace the current plan with “${m.option.name}”? Save a version first if you want to keep it.`)) setPlan(race.id, car.id, { ...m.option.plan, name: m.option.name });
+                        if (!confirm(`Replace the current plan with “${m.option.name}”? Save a version first if you want to keep it.`)) return;
+                        setPlan(race.id, car.id, { ...m.option.plan, name: m.option.name });
+                        const boxLap = live ? m.option.simOverrides?.[car.live.stintIndex] : undefined;
+                        if (boxLap != null) setPitOverride(race.id, car.id, car.live.stintIndex, boxLap, `Alternative applied: ${m.option.name}`);
                       }}
                     >
                       Apply

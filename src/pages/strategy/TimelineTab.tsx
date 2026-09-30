@@ -3,12 +3,15 @@ import { actualStints } from '../../engine/analysis';
 import { formatDelta, formatLapMs } from '../../engine/format';
 import { blocksFromActual, blocksFromResult, StrategyTimeline } from '../../components/race/StrategyTimeline';
 import { Panel, Seg } from '../../components/ui';
+import { usePlanResult } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { DriverChip } from '../../components/race/DriverChip';
 import type { TabProps } from './shared';
 
-export function TimelineTab({ race, car, res }: TabProps) {
+export function TimelineTab({ race, car }: TabProps) {
   const u = useUnits();
+  // plan vs actual: the plan simulated from lap 1, laid against what was driven
+  const res = usePlanResult(race, car, { fromStart: true });
   const [axis, setAxis] = useState<'lap' | 'time'>('lap');
   const [sel, setSel] = useState(0);
   const plan = blocksFromResult(res);

@@ -12,10 +12,12 @@ import { useStore } from '../../store/store';
 import { marginClass } from '../../lib/margins';
 import { IssueList, type TabProps } from './shared';
 
-export function SimulationTab({ race, car, res }: TabProps) {
+export function SimulationTab({ race, car }: TabProps) {
   const u = useUnits();
   const setPlannedEvents = useStore((s) => s.setPlannedEvents);
-  const withEv = usePlanResult(race, car, true);
+  // planning what-ifs: the whole race from lap 1, with and without the planned scenarios
+  const res = usePlanResult(race, car, { fromStart: true });
+  const withEv = usePlanResult(race, car, { plannedEvents: true });
   const [adding, setAdding] = useState<ScenarioType | null>(null);
   const events = race.plannedEvents;
   const update = (id: string, patch: Partial<ScenarioEvent>) => setPlannedEvents(race.id, events.map((e) => (e.id === id ? { ...e, ...patch } : e)));

@@ -162,3 +162,23 @@ describe('strategist overrides', () => {
     expect(calls.some((x) => /SAVE/.test(x.text) && x.action?.type === 'mode')).toBe(false);
   });
 });
+
+describe('driver actually in the car', () => {
+  test('projection follows the driver put in at the stop, not the planned one', () => {
+    const p0 = projectLive(race, car, DEFAULT_SETTINGS, L.lastLapEndSec);
+    const planned = p0.nextStop!.toDriverId;
+    const other = car.drivers.find((d) => d.id !== planned && d.id !== L.driverId) ?? car.drivers.find((d) => d.id !== planned)!;
+    const live = recordPitStop(
+      car,
+      { inLap: L.lapsCompleted + 1, fuelAddedL: p0.nextStop!.fuelAddedL, changeTires: false, compound: L.compound, toDriverId: other.id, stationarySec: 30, totalLossSec: 55 },
+      L.lastLapEndSec + 150,
+      DEFAULT_SETTINGS,
+    );
+    const c = { ...car, live };
+    const p1 = projectLive({ ...race, cars: [c] }, c, DEFAULT_SETTINGS, live.lastLapEndSec);
+    expect(p1.current!.driverId).toBe(other.id);
+    expect(p1.sim.laps[0].driverId).toBe(other.id);
+    // the next stop is a driver change if the next planned driver differs from who is in the car
+    if (p1.nextStop) expect(p1.nextStop.driverChange).toBe(p1.nextStop.toDriverId !== other.id);
+  });
+});

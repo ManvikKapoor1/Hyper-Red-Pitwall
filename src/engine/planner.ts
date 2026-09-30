@@ -252,14 +252,25 @@ export function stintCaps(setup: CarSetup, plan: StrategyPlan, drivers: Driver[]
     return Math.max(1, Math.min(fuel, energy, d?.maxStintLaps ?? Infinity));
   });
   // tire sets: stints between tire changes share one set's life
+  const init = sim?.initial;
   let groupStart = 0;
   for (let i = 0; i <= plan.stints.length; i++) {
     const ends = i === plan.stints.length || (i > 0 && plan.stints[i - 1].stop.changeTires);
     if (!ends || i === groupStart) continue;
-    const compound = groupStart === 0 ? plan.startCompound : plan.stints[groupStart - 1].stop.compound;
-    const life = getCompound(setup, compound).maxLife - (groupStart === 0 ? plan.startTireAge : 0);
-    const size = i - groupStart;
-    for (let k = groupStart; k < i; k++) caps[k] = Math.max(1, Math.min(caps[k], Math.floor(life / size)));
+    if (init && groupStart <= init.stintIndex && init.stintIndex < i) {
+      // live: the set on the car is already worn and the current stint still uses part of it
+      const cur = init.stintIndex;
+      const plannedEnd = sim?.pitLapOverrides?.[cur] ?? init.stintStartLap + plan.stints[cur].targetLaps - 1;
+      const stillToRun = Math.max(0, plannedEnd - init.lap + 1);
+      const life = getCompound(setup, init.compound).maxLife - init.tireAge - stillToRun;
+      const size = i - (cur + 1);
+      for (let k = cur + 1; k < i; k++) caps[k] = Math.max(1, Math.min(caps[k], Math.floor(life / size)));
+    } else {
+      const compound = groupStart === 0 ? plan.startCompound : plan.stints[groupStart - 1].stop.compound;
+      const life = getCompound(setup, compound).maxLife - (groupStart === 0 ? plan.startTireAge : 0);
+      const size = i - groupStart;
+      for (let k = groupStart; k < i; k++) caps[k] = Math.max(1, Math.min(caps[k], Math.floor(life / size)));
+    }
     groupStart = i;
   }
   return caps;

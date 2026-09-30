@@ -15,7 +15,8 @@ export interface WhatIfRow {
   result: StrategyResult;
 }
 
-const pctLabel = (pct: number) => (pct === 0 ? 'As entered' : `${pct > 0 ? '+' : ''}${pct}%`);
+// the base is the entered value pre-race and the measured rate in a live projection
+const pctLabel = (pct: number, measured: boolean) => (pct === 0 ? (measured ? 'As measured' : 'As entered') : `${pct > 0 ? '+' : ''}${pct}%`);
 
 /**
  * Scale fuel per lap by each percentage (e.g. [-2, 0, 2, 5]). Scaling goes
@@ -25,7 +26,7 @@ export function fuelSensitivity(race: RaceParams, setup: CarSetup, plan: Strateg
   const base = sim?.fuelPerLapL ?? setup.fuelPerLapL;
   return pcts.map((pct) => {
     const fpl = base * (1 + pct / 100);
-    return { key: `fuel${pct}`, label: pctLabel(pct), input: fpl, result: calculateStrategy(race, setup, plan, drivers, { ...sim, fuelPerLapL: fpl }) };
+    return { key: `fuel${pct}`, label: pctLabel(pct, sim?.fuelPerLapL != null), input: fpl, result: calculateStrategy(race, setup, plan, drivers, { ...sim, fuelPerLapL: fpl }) };
   });
 }
 
@@ -34,7 +35,7 @@ export function energySensitivity(race: RaceParams, setup: CarSetup, plan: Strat
   const base = sim?.energyPerLapPct ?? netEnergyPerLap(setup);
   return pcts.map((pct) => {
     const epl = base * (1 + pct / 100);
-    return { key: `energy${pct}`, label: pctLabel(pct), input: epl, result: calculateStrategy(race, setup, plan, drivers, { ...sim, energyPerLapPct: epl }) };
+    return { key: `energy${pct}`, label: pctLabel(pct, sim?.energyPerLapPct != null), input: epl, result: calculateStrategy(race, setup, plan, drivers, { ...sim, energyPerLapPct: epl }) };
   });
 }
 

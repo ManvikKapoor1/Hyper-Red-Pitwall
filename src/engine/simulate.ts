@@ -275,8 +275,8 @@ function simulateOnce(
 
   for (let si = firstStint; si <= lastIdx && !finished; si++) {
     const sp0 = plan.stints[si];
-    // live: the current stint runs in the mode the pitwall has instructed
-    const sp = si === firstStint && init?.mode ? { ...sp0, mode: init.mode } : sp0;
+    // live: the current stint is driven by whoever is in the car, in the mode the pitwall instructed
+    const sp = si === firstStint && init ? { ...sp0, mode: init.mode ?? sp0.mode, driverId: init.driverId ?? sp0.driverId } : sp0;
     const driver = driverMap.get(sp.driverId);
     const dFactor = driverFuelFactor(setup, driver);
     const isFinalPlanned = si === lastIdx;
@@ -535,7 +535,8 @@ function simulateOnce(
     }
     stint.endSec = t;
     stops.push({
-      index: stops.length,
+      // stop number in the race (live projections continue after the stops already made)
+      index: si,
       afterStint: si,
       lap: stintEndLap,
       entrySec,

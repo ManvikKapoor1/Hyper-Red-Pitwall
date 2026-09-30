@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { formatClock, formatDurationShort } from '../engine/format';
-import { raceNowSec } from '../engine/live';
+import { liveSimOptions, raceNowSec } from '../engine/live';
 import { calculateStrategy } from '../engine/simulate';
 import type { Race } from '../engine/types';
 import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
@@ -115,9 +115,16 @@ function RaceCard({ race }: { race: Race }) {
   const duplicateRace = useStore((s) => s.duplicateRace);
   const deleteRace = useStore((s) => s.deleteRace);
   const car = race.cars.find((c) => c.id === race.activeCarId) ?? race.cars[0];
-  const res = useMemo(() => calculateStrategy(race.params, car.setup, car.plan, car.drivers), [race.params, car.setup, car.plan, car.drivers]);
-  const start = new Date(race.params.startTimeISO);
+  const settings = useStore((s) => s.settings);
   const live = race.status === 'LIVE';
+  const racing = live && car.live.phase === 'racing';
+  // live: the same projection as the Live page header; otherwise the plan from lap 1
+  const res = useMemo(
+    () => calculateStrategy(race.params, car.setup, car.plan, car.drivers, racing ? liveSimOptions(race, car, settings) : undefined),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [race.params, car.setup, car.plan, car.drivers, racing, racing ? car.live : null, racing ? race.events : null, settings],
+  );
+  const start = new Date(race.params.startTimeISO);
   const now = live ? raceNowSec(race.clock) : 0;
   const open = live ? 'live' : race.status === 'FINISHED' ? 'analysis' : 'strategy';
   const length = race.params.lengthMode === 'time' ? formatDurationShort(race.params.durationSec) : `${race.params.laps} laps`;
@@ -139,7 +146,7 @@ function RaceCard({ race }: { race: Race }) {
       <div className="rc-stats">
         {live ? (
           <>
-            <Stat k="Lap" v={car.live.lapsCompleted} u={`/ ${res.totalLaps}`} />
+            <Stat k="Lap" v={racing ? car.live.lapsCompleted + 1 : car.live.lapsCompleted} u={`/ ${Math.max(res.totalLaps, car.live.lapsCompleted)}`} />
             <Stat k="Race time" v={formatClock(now)} />
             <Stat k="Stint" v={car.live.stintIndex + 1} u={`/ ${car.plan.stints.length}`} />
           </>

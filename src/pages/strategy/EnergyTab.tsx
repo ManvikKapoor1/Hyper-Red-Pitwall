@@ -5,6 +5,7 @@ import { netEnergyPerLap } from '../../engine/model';
 import { energySensitivity } from '../../engine/whatif';
 import { LineChart } from '../../components/charts/LineChart';
 import { Panel, Stat } from '../../components/ui';
+import { useLiveSim } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { marginClass } from '../../lib/margins';
 import { MODE_LABEL } from '../../lib/labels';
@@ -16,8 +17,12 @@ const ENERGY_PCTS = [-3, 0, 2, 5, 8];
 export function EnergyTab({ race, car, res }: TabProps) {
   const u = useUnits();
   const { setup } = car;
-  const rows = useMemo(() => (setup.energyEnabled ? energySensitivity(race.params, setup, car.plan, car.drivers, ENERGY_PCTS) : []), [race.params, setup, car.plan, car.drivers]);
-  const levels = useMemo(() => [{ x: 0, y: res.stints[0]?.energyStartPct ?? 0 }, ...res.laps.map((l) => ({ x: l.lap, y: l.energyAfterPct }))], [res]);
+  const sim = useLiveSim(race, car);
+  const live = !!sim;
+  const rows = useMemo(() => (setup.energyEnabled ? energySensitivity(race.params, setup, car.plan, car.drivers, ENERGY_PCTS, sim) : []), [race.params, setup, car.plan, car.drivers, sim]);
+  const levels = useMemo(() => [{ x: res.startLap - 1, y: res.stints[0]?.energyStartPct ?? 0 }, ...res.laps.map((l) => ({ x: l.lap, y: l.energyAfterPct }))], [res]);
+  const recorded = useMemo(() => (live ? car.live.laps.map((l) => ({ x: l.lap, y: l.energyAfterPct })) : []), [live, car.live.laps]);
+  const first = res.stints[0]?.index;
   if (!setup.energyEnabled)
     return (
       <div className="notice">
@@ -32,7 +37,7 @@ export function EnergyTab({ race, car, res }: TabProps) {
         <Stat k="Recovery per lap" v={u.n(setup.energyRecoveryPerLapPct, 2)} u="%" h={`net ${u.n(netEnergyPerLap(setup), 2)} %/lap`} />
         <Stat k="Reserve" v={u.n(setup.energyReservePct, 1)} u="%" />
         <Stat k="Stint target" v={u.n(setup.energyTargetPerStintPct, 0)} u="%" h={setup.energyDeployTarget} />
-        <Stat k="Total used" v={u.n(res.energyUsedPct, 0)} u="%" />
+        <Stat k={live ? 'Used to flag' : 'Total used'} v={u.n(res.energyUsedPct, 0)} u="%" />
         <Stat k="Min margin" v={<span className={marginClass(res.minEnergyMarginLaps)}>{u.n(res.minEnergyMarginLaps, 2)}</span>} u="laps" />
         <Link className="btn sm ghost" style={{ alignSelf: 'center', marginLeft: 'auto' }} to={`/app/race/${race.id}/setup`}>
           Edit energy inputs
@@ -43,7 +48,7 @@ export function EnergyTab({ race, car, res }: TabProps) {
         <LineChart
           height={240}
           ariaLabel="Virtual energy remaining at the end of each lap"
-          series={[{ id: 'energy', label: 'Energy', color: 'var(--violet)', points: levels }]}
+          series={[...(live ? [{ id: 'rec', label: 'Recorded', color: 'var(--muted)', points: recorded }] : []), { id: 'energy', label: live ? 'Projected' : 'Energy', color: 'var(--violet)', points: levels }]}
           hlines={[{ y: setup.energyReservePct, label: 'RESERVE', color: 'var(--amber)' }]}
           vlines={res.stops.map((s) => ({ x: s.lap + 0.5, label: `P${s.index + 1}` }))}
           yDomain={[0, Math.max(100, setup.energyCapacityPct)]}
@@ -76,9 +81,9 @@ export function EnergyTab({ race, car, res }: TabProps) {
                 <tr key={s.index}>
                   <td className="mono">S{s.index + 1}</td>
                   <td>{MODE_LABEL[s.mode]}</td>
-                  <td className="n">{s.laps}</td>
-                  <td className="n">{u.pct(s.energyStartPct)}</td>
-                  <td className="n">{s.index === 0 ? '—' : u.pct(s.energyAddedPct)}</td>
+                  <td className="n">{live && s.index === first ? `${s.endLap - s.fromLap + 1} left` : s.laps}</td>
+                  <td className="n">{u.pct(s.energyStartPct)}{live && s.index === first ? ' now' : ''}</td>
+                  <td className="n">{s.index === first ? '—' : u.pct(s.energyAddedPct)}</td>
                   <td className="n">{u.pct(s.energyUsedPct)}</td>
                   <td className="n">{u.n(s.energyPerLapPct, 2)}</td>
                   <td className="n">{s.energyTargetPct != null ? u.pct(s.energyTargetPct) : '—'}</td>
@@ -124,7 +129,7 @@ export function EnergyTab({ race, car, res }: TabProps) {
               </thead>
               <tbody>
                 {rows.map((r) => (
-                  <tr key={r.key} className={r.label === 'As entered' ? 'cur' : ''}>
+                  <tr key={r.key} className={r.label.startsWith('As ') ? 'cur' : ''}>
                     <td>{r.label}</td>
                     <td className="n">{u.n(r.input, 2)}</td>
                     <td className="n">{formatClock(r.result.finishSec)}</td>
