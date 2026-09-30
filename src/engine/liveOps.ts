@@ -3,10 +3,11 @@
  * touch the UI and are easy to unit-test.
  */
 import { measureEnergyPerLap, measureFuelPerLap } from './live';
+import { activeEventAt } from './model';
 import { uid } from './planner';
 import { calculateStrategy } from './simulate';
 import type { QuickUpdateInput } from './validate';
-import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, Settings } from './types';
+import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, ScenarioEvent, Settings } from './types';
 
 export function cloneLive(live: CarLive): CarLive {
   return {
@@ -43,7 +44,7 @@ export function emptyLive(car: Pick<CarEntry, 'setup' | 'plan' | 'drivers'>, set
     position: null,
     traffic: 'clear',
     weather: 'Dry',
-    driveMode: 'normal',
+    driveMode: s0?.mode ?? 'normal',
     fuelMethod: settings.defaults.fuelMethod,
     lastN: settings.defaults.lastN,
     userFuelPerLapL: null,
@@ -76,7 +77,11 @@ export function startRaceLive(live: CarLive): CarLive {
   return { ...cloneLive(live), phase: 'racing', lapsCompleted: 0, lastLapEndSec: 0, stintStartLap: 1 };
 }
 
-export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec: number, settings: Settings): CarLive {
+/**
+ * Apply a manual update. `events` tags laps driven under a safety car / slow
+ * zone so they are left out of the green-flag consumption and pace averages.
+ */
+export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec: number, settings: Settings, events: ScenarioEvent[] = []): CarLive {
   const live = cloneLive(car.live);
   const prev = live.lapsCompleted;
   const next = input.lapsCompleted ?? prev;
@@ -112,6 +117,7 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     let t = live.lastLapEndSec;
     for (let k = 1; k <= delta; k++) {
       const lapMs = k === delta && lastMs ? lastMs : otherMs;
+      const lapStart = t;
       t += lapMs / 1000;
       const rec: LapRecord = {
         lap: prev + k,
@@ -125,6 +131,8 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
         energyAfterPct: live.energyPct - (energyUsedTotal / delta) * k,
         tireAge: Math.max(0, tireStart) + k,
         compound: input.compound ?? live.compound,
+        mode: live.driveMode,
+        event: activeEventAt(events, lapStart)?.type,
         estimated: delta > 1 || !timeKnown,
       };
       live.laps.push(rec);
@@ -215,6 +223,7 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
       energyAfterPct: Math.max(0, live.energyPct - energyRate),
       tireAge: live.tireAge + 1,
       compound: live.compound,
+      mode: live.driveMode,
       pitIn: true,
       estimated: input.inLapMs == null,
     });
@@ -258,7 +267,8 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
   live.stintStartFuelL = live.fuelL;
   live.stintStartEnergyPct = live.energyPct;
   live.pitPhase = null;
-  live.driveMode = 'normal';
+  // the new stint starts in the mode the plan gives it
+  live.driveMode = car.plan.stints[live.stintIndex]?.mode ?? 'normal';
   live.lastUpdateLap = live.lapsCompleted;
   live = { ...live };
   return live;

@@ -98,6 +98,7 @@ export function demoAdvanceLap(race: Race, car: CarEntry, settings: Settings, o:
       energyAfterPct: live.energyPct,
       tireAge: live.tireAge + 1,
       compound: live.compound,
+      mode: live.driveMode,
       pitIn: true,
       event: ev?.type,
     });
@@ -143,6 +144,7 @@ export function demoAdvanceLap(race: Race, car: CarEntry, settings: Settings, o:
       energyAfterPct: live.energyPct,
       tireAge: live.tireAge,
       compound: live.compound,
+      mode: live.driveMode,
       event: ev?.type,
     });
     live.lapsCompleted = lap;

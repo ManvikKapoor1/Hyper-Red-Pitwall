@@ -192,7 +192,7 @@ export interface ScenarioEvent {
   fuelReductionPct: number;
   energyReductionPct: number;
   pitOpen: boolean;
-  pitLossUnderEventSec?: number; // total pit loss while event active (optional)
+  pitLossUnderEventSec?: number; // pit-lane loss while the event is active (replaces the green-flag lane loss)
   planned?: boolean; // simulation-only assumption
 }
 
@@ -215,6 +215,7 @@ export interface LapRecord {
   pitIn?: boolean;
   event?: ScenarioType;
   estimated?: boolean; // interpolated from a multi-lap manual update
+  mode?: DriveMode; // drive mode the lap was driven in (as instructed by the pitwall)
 }
 
 export interface ActualStop {

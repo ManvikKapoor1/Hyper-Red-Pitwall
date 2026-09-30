@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { LiveProjection } from '../../engine/live';
+import { splashAmounts } from '../../engine/calls';
 import { activeEventAt, calculatePitLoss } from '../../engine/model';
 import type { CarEntry, Race } from '../../engine/types';
 import { useUnits } from '../../lib/units';
@@ -14,8 +15,14 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
   const { live, setup } = car;
   const nextDriver = ns?.toDriverId ?? live.driverId;
   const [inLap, setInLap] = useState(live.lapsCompleted + 1);
-  const [fuelAdded, setFuelAdded] = useState<number>(prefill?.fuelAfterL != null ? Math.max(0, prefill.fuelAfterL - live.fuelL) : (ns?.fuelAddedL ?? setup.fuelCapacityL - live.fuelL));
-  const [energyAfter, setEnergyAfter] = useState<number>(Math.min(setup.energyCapacityPct, live.energyPct + (ns?.energyAddedPct ?? setup.energyCapacityPct - live.energyPct)));
+  // fuel / energy when the car reaches the box: the in-lap still burns one lap unless it is already counted
+  const inLapPending = live.lapsCompleted + 1;
+  const entryFuel = Math.max(0, live.fuelL - p.fuelRate.value);
+  const entryEnergy = Math.max(0, live.energyPct - p.energyRate.value);
+  // planned stop, or — with no stop left in the plan — a splash sized to reach the flag
+  const planned = ns ? { fuelAddedL: ns.fuelAddedL, energyAddedPct: ns.energyAddedPct } : splashAmounts(car, p, inLapPending);
+  const [fuelAdded, setFuelAdded] = useState<number>(prefill?.fuelAfterL != null ? Math.max(0, prefill.fuelAfterL - entryFuel) : Math.min(planned.fuelAddedL, setup.fuelCapacityL - entryFuel));
+  const [energyAfter, setEnergyAfter] = useState<number>(Math.min(setup.energyCapacityPct, entryEnergy + planned.energyAddedPct));
   const [tires, setTires] = useState<boolean>(ns?.changeTires ?? false);
   const [compound, setCompound] = useState<string>(ns?.compound ?? live.compound);
   const [driver, setDriver] = useState<string>(nextDriver);
@@ -63,7 +70,16 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
       }
     >
       <div className="notice mb-8">
-        Plan for this stop: <b>{ns ? `+${u.fuel(ns.fuelAddedL)} ${u.fuelUnit} · ${ns.changeTires ? 'tires ' + ns.compound : 'no tires'} · ${ns.driverChange ? 'driver change' : 'same driver'}` : 'no stop planned'}</b>. Enter what actually happened.
+        {ns ? (
+          <>
+            Plan for this stop: <b>{`+${u.fuel(ns.fuelAddedL)} ${u.fuelUnit} · ${ns.changeTires ? 'tires ' + ns.compound : 'no tires'} · ${ns.driverChange ? 'driver change' : 'same driver'}`}</b>.
+          </>
+        ) : (
+          <>
+            No stop left in the plan — suggested splash to reach the flag: <b>+{u.fuelU(planned.fuelAddedL)}</b>.
+          </>
+        )}{' '}
+        Enter what actually happened.
         {ev && <span className="c-amber"> Stop under {ev.label}.</span>}
       </div>
       <div className="grid-4">

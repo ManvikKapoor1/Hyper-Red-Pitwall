@@ -401,7 +401,7 @@ export const useStore = create<AppState>()(
             const now = nowFor(r);
             let clock = r.clock;
             if (input.raceTimeSec != null) clock = { ...clock, anchorRaceSec: input.raceTimeSec, anchorEpochMs: Date.now() };
-            const out = mapCar({ ...r, clock }, carId, (c) => ({ ...c, live: applyQuickUpdate(c, input, input.raceTimeSec ?? now, st) }));
+            const out = mapCar({ ...r, clock }, carId, (c) => ({ ...c, live: applyQuickUpdate(c, input, input.raceTimeSec ?? now, st, r.events) }));
             const lastEnd = out.cars.find((c) => c.id === carId)?.live.lastLapEndSec ?? 0;
             // keep the race clock from lagging behind recorded laps (e.g. paused clock)
             if (lastEnd > nowFor(out)) out.clock = { ...out.clock, anchorRaceSec: lastEnd, anchorEpochMs: Date.now() };

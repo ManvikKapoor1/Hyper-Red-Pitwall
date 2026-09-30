@@ -228,6 +228,8 @@ function simulateOnce(
   const overrides = opts.pitLapOverrides ?? {};
   const earlyThr = opts.earlyThresholdLaps ?? 3;
   const init = opts.initial;
+  // laps of fuel kept at a planned stop: the planning reserve, never less than the safety margin
+  const keepLaps = Math.max(setup.fuelReserveLaps, setup.fuelSafetyMarginLaps);
 
   const issues: SimIssue[] = [];
   const laps: SimLap[] = [];
@@ -263,7 +265,7 @@ function simulateOnce(
     const d0 = driverMap.get(s0.driverId);
     const fpl = s0.fuelPerLapOverrideL ?? calculateFuelPerLap(baseFuel, setup, s0.mode, undefined, driverFuelFactor(setup, d0));
     const n = lastIdx === 0 ? estTotalLaps : s0.targetLaps;
-    fuel = Math.min(setup.fuelCapacityL, fpl * (n + setup.fuelReserveLaps));
+    fuel = Math.min(setup.fuelCapacityL, fpl * (n + keepLaps));
   }
 
   let prevFuelAdded = 0;
@@ -366,7 +368,7 @@ function simulateOnce(
         pitIn,
         event: ev?.type,
       });
-      if (fuel < 0 && !issues.some((i) => i.code === 'FUEL_OUT' && i.stint === si)) {
+      if (fuel < -1e-9 && !issues.some((i) => i.code === 'FUEL_OUT' && i.stint === si)) {
         issues.push({
           severity: 'critical',
           code: 'FUEL_OUT',
@@ -375,7 +377,7 @@ function simulateOnce(
           lap,
         });
       }
-      if (setup.energyEnabled && energy < 0 && !issues.some((i) => i.code === 'ENERGY_OUT' && i.stint === si)) {
+      if (setup.energyEnabled && energy < -1e-9 && !issues.some((i) => i.code === 'ENERGY_OUT' && i.stint === si)) {
         issues.push({
           severity: 'critical',
           code: 'ENERGY_OUT',
@@ -501,7 +503,7 @@ function simulateOnce(
       next.fuelPerLapOverrideL ??
       calculateFuelPerLap(baseFuel, setup, next.mode, undefined, driverFuelFactor(setup, nextDriver));
     const nextEpl = calculateEnergyPerLap(baseEnergy, setup, next.mode);
-    const fuelNeeded = nextFpl * (nextLaps + setup.fuelReserveLaps);
+    const fuelNeeded = nextFpl * (nextLaps + keepLaps);
     const energyNeeded = nextEpl * nextLaps + setup.energyReservePct;
     const fuelAdd = resolveRefill(cfg.fuel, fuelNeeded, Math.max(0, fuel), setup.fuelCapacityL);
     const energyAdd = setup.energyEnabled
