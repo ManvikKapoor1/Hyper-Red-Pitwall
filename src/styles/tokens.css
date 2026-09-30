@@ -1,0 +1,100 @@
+/* STINT design tokens — colour is reserved for race-critical state. */
+:root,
+:root[data-theme='dark'] {
+  --bg: #07080a;
+  --bg-2: #0b0d10;
+  --panel: #101317;
+  --panel-2: #14181d;
+  --panel-3: #1a1f25;
+  --line: #20262d;
+  --line-2: #2b323b;
+  --line-3: #3a434e;
+  --text: #e9ecef;
+  --text-2: #bcc3cc;
+  --muted: #838c97;
+  --dim: #58616b;
+
+  --green: #34c46b;
+  --green-bg: rgba(52, 196, 107, 0.11);
+  --green-line: rgba(52, 196, 107, 0.45);
+  --amber: #f1b52c;
+  --amber-bg: rgba(241, 181, 44, 0.11);
+  --amber-line: rgba(241, 181, 44, 0.5);
+  --red: #f2453b;
+  --red-bg: rgba(242, 69, 59, 0.13);
+  --red-line: rgba(242, 69, 59, 0.55);
+  --blue: #4f9dff;
+  --blue-bg: rgba(79, 157, 255, 0.11);
+  --blue-line: rgba(79, 157, 255, 0.45);
+  --violet: #a482ff;
+  --violet-bg: rgba(164, 130, 255, 0.12);
+  --violet-line: rgba(164, 130, 255, 0.5);
+
+  --focus: #4f9dff;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.55);
+  --hatch: repeating-linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0 4px, transparent 4px 8px);
+
+  --font-head: 'Barlow Condensed', 'Arial Narrow', sans-serif;
+  --font-body: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+
+  --r: 2px;
+  --gap: 8px;
+  --sidebar: 184px;
+  --sidebar-min: 56px;
+  color-scheme: dark;
+}
+
+:root[data-theme='contrast'] {
+  --bg: #000;
+  --bg-2: #000;
+  --panel: #07090b;
+  --panel-2: #0c0f12;
+  --panel-3: #13171b;
+  --line: #333b44;
+  --line-2: #45505b;
+  --line-3: #5a6572;
+  --text: #fff;
+  --text-2: #dfe4ea;
+  --muted: #a8b1bb;
+  --dim: #7c8691;
+  --green: #3ee07a;
+  --amber: #ffc53d;
+  --red: #ff4b40;
+  --blue: #5eaaff;
+  --violet: #b596ff;
+  color-scheme: dark;
+}
+
+:root[data-theme='light'] {
+  --bg: #e9ebee;
+  --bg-2: #dfe2e6;
+  --panel: #f7f8f9;
+  --panel-2: #eef0f2;
+  --panel-3: #e4e7ea;
+  --line: #d0d5db;
+  --line-2: #bcc3cb;
+  --line-3: #9aa3ad;
+  --text: #0e1114;
+  --text-2: #2c3238;
+  --muted: #5b646e;
+  --dim: #858e98;
+  --green: #0f8a43;
+  --green-bg: rgba(15, 138, 67, 0.1);
+  --green-line: rgba(15, 138, 67, 0.45);
+  --amber: #a86b00;
+  --amber-bg: rgba(200, 130, 0, 0.12);
+  --amber-line: rgba(168, 107, 0, 0.5);
+  --red: #c8231a;
+  --red-bg: rgba(200, 35, 26, 0.1);
+  --red-line: rgba(200, 35, 26, 0.5);
+  --blue: #1f63c9;
+  --blue-bg: rgba(31, 99, 201, 0.1);
+  --blue-line: rgba(31, 99, 201, 0.45);
+  --violet: #6b45d6;
+  --violet-bg: rgba(107, 69, 214, 0.1);
+  --violet-line: rgba(107, 69, 214, 0.45);
+  --shadow: 0 8px 24px rgba(20, 30, 40, 0.18);
+  --hatch: repeating-linear-gradient(135deg, rgba(0, 0, 0, 0.06) 0 4px, transparent 4px 8px);
+  color-scheme: light;
+}

@@ -1,0 +1,378 @@
+/**
+ * Live projection — combines the human-entered race state with the plan and
+ * re-runs the strategy from the current lap.
+ */
+import {
+  activeEventAt,
+  calculateFuelRemainingLaps,
+  driverFuelFactor,
+  getCompound,
+  netEnergyPerLap,
+  predictLapMs,
+  requiredFuelPerLap,
+} from './model';
+import { calculateStrategy, type SimOptions, type SimStint, type SimStop, type StrategyResult } from './simulate';
+import type { CarEntry, Confidence, FuelMethod, LapRecord, Race, RaceClock, ScenarioEvent, Settings } from './types';
+
+export interface MeasuredRate {
+  value: number;
+  source: string;
+  samples: number;
+  confidence: Confidence;
+  measured: boolean;
+  spread: number; // coefficient of variation (0–1)
+}
+
+export type RaceStateName =
+  | 'PRE-RACE'
+  | 'GRID'
+  | 'START'
+  | 'STINT'
+  | 'PIT WINDOW'
+  | 'PIT ENTRY'
+  | 'PIT STOP'
+  | 'PIT EXIT'
+  | 'NEW STINT'
+  | 'SAFETY CAR'
+  | 'SLOW ZONE'
+  | 'STRATEGY CHANGE'
+  | 'FINISH';
+
+export const RACE_STATES: RaceStateName[] = [
+  'PRE-RACE',
+  'GRID',
+  'START',
+  'STINT',
+  'PIT WINDOW',
+  'PIT ENTRY',
+  'PIT STOP',
+  'PIT EXIT',
+  'NEW STINT',
+  'SAFETY CAR',
+  'SLOW ZONE',
+  'STRATEGY CHANGE',
+  'FINISH',
+];
+
+export type WindowState = 'CLOSED' | 'OPEN' | 'CLOSING' | 'MISSED' | 'FINAL';
+
+export interface LiveProjection {
+  raceTimeSec: number;
+  remainingSec: number;
+  currentLap: number;
+  lapsCompleted: number;
+  stintIndex: number;
+  stintLap: number; // laps completed in this stint
+  totalStints: number;
+  fuelRate: MeasuredRate;
+  energyRate: MeasuredRate;
+  pace: { avgMs: number; lastMs: number | null; bestMs: number | null; biasMs: number; samples: number; predictedMs: number };
+  sim: StrategyResult;
+  current?: SimStint;
+  nextStint?: SimStint;
+  nextStop?: SimStop;
+  totalLaps: number;
+  finishSec: number;
+  fuelRange: ReturnType<typeof calculateFuelRemainingLaps>;
+  energyRange: { theoretical: number; safe: number; safeWhole: number };
+  window: { earliest: number; latest: number; target: number; state: WindowState; etaSec: number; lapsTo: number };
+  fuelAtPitL: number;
+  fuelAtPitLaps: number;
+  energyAtPitPct: number;
+  tireAgeAtPit: number;
+  fuelToFinishStintL: number;
+  fuelToFinishRaceL: number;
+  fuelRequiredPerLap: number; // to reach target with reserve
+  fuelSavePct: number; // % reduction needed (0 when none)
+  energyRequiredPerLap: number;
+  energySavePct: number;
+  energyTargetPct: number | null; // energy that should remain now per the stint budget
+  isFinalStint: boolean;
+  activeEvent?: ScenarioEvent;
+  state: RaceStateName;
+  dataAgeLaps: number;
+  extendLaps: number;
+}
+
+export function raceNowSec(clock: RaceClock, nowMs = Date.now()): number {
+  if (!clock.running) return clock.anchorRaceSec;
+  return clock.anchorRaceSec + ((nowMs - clock.anchorEpochMs) / 1000) * clock.speed;
+}
+
+function confidenceFrom(samples: number, spread: number, stale: boolean): Confidence {
+  let c: Confidence = samples >= 5 ? 'HIGH' : samples >= 2 ? 'MEDIUM' : 'LOW';
+  if (spread > 0.08 && c === 'HIGH') c = 'MEDIUM';
+  if (stale) c = c === 'HIGH' ? 'MEDIUM' : 'LOW';
+  return c;
+}
+
+function stats(values: number[]) {
+  if (!values.length) return { mean: 0, cv: 0 };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  const sd = Math.sqrt(values.reduce((a, v) => a + (v - mean) ** 2, 0) / values.length);
+  return { mean, cv: mean > 0 ? sd / mean : 0 };
+}
+
+function greenLaps(laps: LapRecord[]): LapRecord[] {
+  return laps.filter((l) => !l.pitIn && !l.event);
+}
+
+function selectLaps(car: CarEntry, method: FuelMethod, lastN: number): { laps: LapRecord[]; label: string } {
+  const g = greenLaps(car.live.laps);
+  switch (method) {
+    case 'stint':
+      return { laps: g.filter((l) => l.stint === car.live.stintIndex), label: 'Current stint average' };
+    case 'race':
+      return { laps: g, label: 'Race average' };
+    case 'lastN':
+    default:
+      return { laps: g.slice(-lastN), label: `Last ${lastN} laps` };
+  }
+}
+
+/** calculateFuelPerLap (measured) — chooses the strategist's calculation method. */
+export function measureFuelPerLap(car: CarEntry, settings: Settings): MeasuredRate {
+  const { live, setup } = car;
+  const stale = live.lapsCompleted - live.lastUpdateLap >= settings.alerts.staleDataLaps;
+  if (live.fuelMethod === 'user' && live.userFuelPerLapL) {
+    return { value: live.userFuelPerLapL, source: 'User-defined value', samples: 0, confidence: 'MEDIUM', measured: false, spread: 0 };
+  }
+  const { laps, label } = selectLaps(car, live.fuelMethod, live.lastN);
+  const vals = laps.map((l) => l.fuelUsedL).filter((v): v is number => v != null && v > 0);
+  if (!vals.length) {
+    return { value: setup.fuelPerLapL, source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+  }
+  const { mean, cv } = stats(vals);
+  return { value: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
+}
+
+export function measureEnergyPerLap(car: CarEntry, settings: Settings): MeasuredRate {
+  const { live, setup } = car;
+  const stale = live.lapsCompleted - live.lastUpdateLap >= settings.alerts.staleDataLaps;
+  const method = live.fuelMethod === 'user' ? 'lastN' : live.fuelMethod;
+  const { laps, label } = selectLaps(car, method, live.lastN);
+  const vals = laps.map((l) => l.energyUsedPct).filter((v): v is number => v != null && v > 0);
+  if (!setup.energyEnabled) return { value: 0, source: 'Energy disabled', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+  if (!vals.length) {
+    return { value: netEnergyPerLap(setup), source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+  }
+  const { mean, cv } = stats(vals);
+  return { value: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
+}
+
+export function measurePace(car: CarEntry, lastN: number) {
+  const { live, setup, drivers } = car;
+  const g = greenLaps(live.laps).filter((l) => !l.estimated || live.laps.length < 3);
+  const recent = g.slice(-lastN);
+  const dmap = new Map(drivers.map((d) => [d.id, d]));
+  let bias = 0;
+  if (recent.length) {
+    const diffs = recent.map((l) => {
+      const pred = predictLapMs({
+        setup,
+        driver: dmap.get(l.driverId),
+        compound: getCompound(setup, l.compound),
+        tireAge: Math.max(0, l.tireAge - 1),
+        mode: live.driveMode,
+        fuelL: l.fuelAfterL + (l.fuelUsedL ?? 0),
+      });
+      return l.lapMs - pred;
+    });
+    bias = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+  }
+  const avg = recent.length ? recent.reduce((a, l) => a + l.lapMs, 0) / recent.length : 0;
+  const predictedMs = predictLapMs({
+    setup,
+    driver: dmap.get(live.driverId),
+    compound: getCompound(setup, live.compound),
+    tireAge: live.tireAge,
+    mode: live.driveMode,
+    fuelL: live.fuelL,
+  });
+  return { avgMs: avg, lastMs: live.lastLapMs, bestMs: live.bestLapMs, biasMs: bias, samples: recent.length, predictedMs: predictedMs + bias };
+}
+
+export function deriveRaceState(race: Race, car: CarEntry, windowState: WindowState, nowSec: number): RaceStateName {
+  const { live } = car;
+  if (live.phase === 'pre') return 'PRE-RACE';
+  if (live.phase === 'grid') return 'GRID';
+  if (live.phase === 'finished') return 'FINISH';
+  if (live.pitPhase === 'entry') return 'PIT ENTRY';
+  if (live.pitPhase === 'stationary') return 'PIT STOP';
+  if (live.pitPhase === 'exit') return 'PIT EXIT';
+  const ev = activeEventAt(race.events, nowSec);
+  if (ev) {
+    if (ev.type === 'SLOW_ZONE') return 'SLOW ZONE';
+    if (ev.type === 'SAFETY_CAR' || ev.type === 'FCY' || ev.type === 'VSC' || ev.type === 'RED_FLAG') return 'SAFETY CAR';
+  }
+  if (live.lapsCompleted < 1 && live.stintIndex === 0) return 'START';
+  if (live.strategyChangedLap != null && live.lapsCompleted + 1 - live.strategyChangedLap <= 1) return 'STRATEGY CHANGE';
+  if (live.stintIndex > 0 && live.lapsCompleted + 1 - live.stintStartLap < 2) return 'NEW STINT';
+  if (windowState === 'OPEN' || windowState === 'CLOSING' || windowState === 'MISSED') return 'PIT WINDOW';
+  return 'STINT';
+}
+
+/** Simulation options that project the plan from the live state with measured rates. */
+export function liveSimOptions(
+  race: Race,
+  car: CarEntry,
+  settings: Settings,
+  m?: { fuelRate: MeasuredRate; energyRate: MeasuredRate; pace: ReturnType<typeof measurePace> },
+): SimOptions {
+  const { live, setup, plan, drivers } = car;
+  const fuelRate = m?.fuelRate ?? measureFuelPerLap(car, settings);
+  const energyRate = m?.energyRate ?? measureEnergyPerLap(car, settings);
+  const pace = m?.pace ?? measurePace(car, live.lastN);
+  const racing = live.phase === 'racing' || live.phase === 'finished';
+  const currentDriver = drivers.find((d) => d.id === live.driverId);
+  // neutralise the measured value to a normal-mode, reference-driver rate
+  const modeFuel = 1 + (setup.modes[live.driveMode]?.fuelPct ?? 0) / 100;
+  const modeEnergy = 1 + (setup.modes[live.driveMode]?.energyPct ?? 0) / 100;
+  const baseFuel = fuelRate.measured || live.fuelMethod === 'user' ? fuelRate.value / (driverFuelFactor(setup, currentDriver) * modeFuel) : undefined;
+  const baseEnergy = energyRate.measured ? energyRate.value / modeEnergy : undefined;
+  return {
+    initial: racing
+      ? {
+          lap: live.lapsCompleted + 1,
+          timeSec: live.lastLapEndSec,
+          stintIndex: Math.min(live.stintIndex, plan.stints.length - 1),
+          stintStartLap: live.stintStartLap,
+          fuelL: live.fuelL,
+          energyPct: live.energyPct,
+          compound: live.compound,
+          tireAge: live.tireAge,
+          driverId: live.driverId,
+          mode: live.driveMode,
+        }
+      : undefined,
+    fuelPerLapL: baseFuel,
+    energyPerLapPct: baseEnergy,
+    paceBiasMs: pace.samples >= 2 ? pace.biasMs : undefined,
+    events: race.events,
+    pitLapOverrides: live.pitLapOverrides,
+    earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps,
+  };
+}
+
+export function projectLive(race: Race, car: CarEntry, settings: Settings, nowSec: number): LiveProjection {
+  const { live, setup, plan, drivers } = car;
+  const fuelRate = measureFuelPerLap(car, settings);
+  const energyRate = measureEnergyPerLap(car, settings);
+  const pace = measurePace(car, live.lastN);
+  const racing = live.phase === 'racing' || live.phase === 'finished';
+  const simOpts = liveSimOptions(race, car, settings, { fuelRate, energyRate, pace });
+  const sim = calculateStrategy(race.params, setup, plan, drivers, simOpts);
+
+  const current = sim.stints[0];
+  const nextStint = sim.stints[1];
+  const nextStop = sim.stops[0];
+  const currentLap = racing ? live.lapsCompleted + 1 : 0;
+  const isFinalStint = !nextStop;
+
+  const liveFpl = fuelRate.value;
+  const liveEpl = energyRate.value;
+  const fuelRange = calculateFuelRemainingLaps(live.fuelL, liveFpl, setup.fuelSafetyMarginLaps);
+  const eTheo = setup.energyEnabled && liveEpl > 0 ? live.energyPct / liveEpl : Infinity;
+  const eSafe = setup.energyEnabled && liveEpl > 0 ? (live.energyPct - setup.energyReservePct) / liveEpl : Infinity;
+  const energyRange = { theoretical: eTheo, safe: eSafe, safeWhole: Math.max(0, Math.floor(eSafe + 1e-9)) };
+
+  const target = current ? current.endLap : currentLap;
+  const lapsTo = target - Math.max(currentLap, 1);
+  const lapsInclCurrent = Math.max(1, lapsTo + 1);
+  const earliest = current?.window.earliest ?? currentLap;
+  const latestByCurrent = currentLap + Math.min(fuelRange.safeWhole, setup.energyEnabled ? energyRange.safeWhole : Infinity, current ? current.maxLaps.tire : Infinity, current ? current.maxLaps.driver : Infinity) - 1;
+  const latest = Math.max(currentLap - 1, latestByCurrent);
+
+  let wstate: WindowState = 'CLOSED';
+  if (isFinalStint) wstate = 'FINAL';
+  else if (currentLap > latest) wstate = 'MISSED';
+  else if (currentLap >= earliest && latest - currentLap <= settings.alerts.pitWindowWarnLaps) wstate = 'CLOSING';
+  else if (currentLap >= earliest) wstate = 'OPEN';
+
+  // ETA to the in-lap completing (race clock)
+  const inLap = sim.laps.find((l) => l.lap === target);
+  const etaSec = inLap ? Math.max(0, (nextStop ? nextStop.entrySec : inLap.endSec) - nowSec) : 0;
+
+  const fuelAtPitL = current ? current.fuelEndL : live.fuelL;
+  const fuelAtPitLaps = liveFpl > 0 ? fuelAtPitL / liveFpl : Infinity;
+  const energyAtPitPct = current ? current.energyEndPct : live.energyPct;
+  const tireAgeAtPit = current ? current.tireAgeEnd : live.tireAge;
+  const fuelToFinishStintL = liveFpl * lapsInclCurrent;
+  const lapsToFinish = Math.max(0, sim.totalLaps - currentLap + 1);
+  const fuelToFinishRaceL = liveFpl * lapsToFinish;
+
+  const reqFpl = requiredFuelPerLap(live.fuelL, lapsInclCurrent, setup.fuelSafetyMarginLaps, liveFpl);
+  const fuelSavePct = liveFpl > 0 && reqFpl < liveFpl ? (1 - reqFpl / liveFpl) * 100 : 0;
+  const reqEpl = setup.energyEnabled ? Math.max(0, live.energyPct - setup.energyReservePct) / lapsInclCurrent : Infinity;
+  const energySavePct = setup.energyEnabled && liveEpl > 0 && reqEpl < liveEpl ? (1 - reqEpl / liveEpl) * 100 : 0;
+  const planStint = plan.stints[live.stintIndex];
+  let energyTargetPct: number | null = null;
+  if (setup.energyEnabled && racing) {
+    const stintLaps = Math.max(1, (current ? current.endLap : target) - live.stintStartLap + 1);
+    const budget = planStint?.energyTargetPct ?? Math.max(0, live.stintStartEnergyPct - setup.energyReservePct);
+    const doneLaps = Math.max(0, currentLap - live.stintStartLap);
+    energyTargetPct = live.stintStartEnergyPct - (budget / stintLaps) * doneLaps;
+  }
+
+  const activeEvent = activeEventAt(race.events, nowSec);
+  const remainingSec =
+    race.params.lengthMode === 'time' ? Math.max(0, race.params.durationSec - nowSec) : Math.max(0, sim.finishSec - nowSec);
+  const state = deriveRaceState(race, car, wstate, nowSec);
+  const extendLaps = isFinalStint ? 0 : Math.max(0, latest - target);
+
+  return {
+    raceTimeSec: nowSec,
+    remainingSec,
+    currentLap,
+    lapsCompleted: live.lapsCompleted,
+    stintIndex: live.stintIndex,
+    stintLap: racing ? live.lapsCompleted + 1 - live.stintStartLap : 0,
+    totalStints: plan.stints.length,
+    fuelRate,
+    energyRate,
+    pace,
+    sim,
+    current,
+    nextStint,
+    nextStop,
+    totalLaps: sim.totalLaps,
+    finishSec: sim.finishSec,
+    fuelRange,
+    energyRange,
+    window: { earliest, latest, target, state: wstate, etaSec, lapsTo },
+    fuelAtPitL,
+    fuelAtPitLaps,
+    energyAtPitPct,
+    tireAgeAtPit,
+    fuelToFinishStintL,
+    fuelToFinishRaceL,
+    fuelRequiredPerLap: reqFpl,
+    fuelSavePct,
+    energyRequiredPerLap: reqEpl,
+    energySavePct,
+    energyTargetPct,
+    isFinalStint,
+    activeEvent,
+    state,
+    dataAgeLaps: live.lapsCompleted - live.lastUpdateLap,
+    extendLaps,
+  };
+}
+
+/** Energy remaining (%) after n laps at a rate. */
+export function calculateEnergyRemaining(energyPct: number, perLapPct: number, laps: number): number {
+  return energyPct - perLapPct * laps;
+}
+
+/** Stint energy budget: allocation, per-lap allowance and projected end. */
+export function calculateEnergyBudget(startPct: number, reservePct: number, laps: number, perLapPct: number) {
+  const usable = Math.max(0, startPct - reservePct);
+  const allowancePerLap = laps > 0 ? usable / laps : 0;
+  const projectedEnd = startPct - perLapPct * laps;
+  return { usable, allowancePerLap, projectedEnd, delta: allowancePerLap - perLapPct };
+}
+
+/** Pit window for a stint (in-lap numbers). */
+export function calculatePitWindow(p: LiveProjection) {
+  return p.window;
+}
