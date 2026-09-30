@@ -55,9 +55,10 @@ export interface PostRaceSummary {
 /**
  * Fuel and energy each recorded lap used. Where a reading was not typed the
  * drop in the remaining amount is used instead (pit stops add back what was
- * put in), so totals cover every lap.
+ * put in), so totals cover every lap. `span` is the number of laps the value
+ * covers — more than one when the laps before it were deleted.
  */
-export function lapUsage(car: CarEntry): { lap: number; fuelL: number; energyPct: number }[] {
+export function lapUsage(car: CarEntry): { lap: number; fuelL: number; energyPct: number; span: number }[] {
   const { laps, stops } = car.live;
   const addAfter = new Map(stops.map((s) => [s.lap, s]));
   return laps.map((l, i) => {
@@ -65,9 +66,10 @@ export function lapUsage(car: CarEntry): { lap: number; fuelL: number; energyPct
     const stop = prev ? addAfter.get(prev.lap) : undefined;
     const fuelBefore = prev ? prev.fuelAfterL + (stop?.fuelAddedL ?? 0) : null;
     const energyBefore = prev ? prev.energyAfterPct + (stop?.energyAddedPct ?? 0) : null;
+    const span = l.fuelUsedL == null && prev ? Math.max(1, l.lap - prev.lap) : 1;
     const fuelL = l.fuelUsedL ?? (fuelBefore != null ? Math.max(0, fuelBefore - l.fuelAfterL) : 0);
     const energyPct = l.energyUsedPct ?? (energyBefore != null ? Math.max(0, energyBefore - l.energyAfterPct) : 0);
-    return { lap: l.lap, fuelL, energyPct };
+    return { lap: l.lap, fuelL, energyPct, span };
   });
 }
 
@@ -84,7 +86,7 @@ export function actualStints(car: CarEntry): ActualStint[] {
   for (const [idx, laps] of [...by.entries()].sort((a, b) => a[0] - b[0])) {
     const green = laps.filter((l) => !l.pitIn && !l.event);
     const fuel = laps.reduce((a, l) => a + (usage.get(l.lap)?.fuelL ?? 0), 0);
-    const fuelN = laps.filter((l) => (usage.get(l.lap)?.fuelL ?? 0) > 0).length;
+    const fuelN = laps.reduce((a, l) => a + ((usage.get(l.lap)?.fuelL ?? 0) > 0 ? usage.get(l.lap)!.span : 0), 0);
     out.push({
       index: idx,
       driverId: laps[0].driverId,
@@ -155,7 +157,7 @@ export function postRaceSummary(race: Race, car: CarEntry): PostRaceSummary {
     totalPitSec: live.stops.reduce((a, s) => a + s.totalLossSec, 0),
     totalStationarySec: live.stops.reduce((a, s) => a + s.stationarySec, 0),
     fuelUsedL,
-    avgFuelPerLapL: fuelLaps.length ? fuelUsedL / fuelLaps.length : 0,
+    avgFuelPerLapL: fuelLaps.length ? fuelUsedL / fuelLaps.reduce((a, u) => a + u.span, 0) : 0,
     energyUsedPct,
     tireSets: 1 + live.stops.filter((s) => s.changeTires).length,
     driverStints: drivers,

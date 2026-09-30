@@ -192,7 +192,9 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
   const finished = live.phase === 'finished';
   // after the flag: what was actually left in the tank
   const margin = finished ? p.fuelAtPitLaps : p.isFinalStint ? (p.current?.fuelMarginLaps ?? 0) : p.fuelAtPitLaps;
-  const mColor = margin < 1 ? 'red' : margin < 2 ? 'amber' : 'green';
+  // colour follows the value as shown (one decimal)
+  const shown = Math.round(margin * 10) / 10;
+  const mColor = shown < 1 ? 'red' : shown < 2 ? 'amber' : 'green';
   return (
     <Panel
       title={<span className="label"><IconFuel size={11} /> Fuel</span>}
@@ -209,7 +211,7 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
         {live.fuelMethod === 'user' ? (
           <div className="stat right" style={{ width: 96 }}>
             <span className="k">Per lap (user)</span>
-            <NumInput size="sm" value={u.fuelVal(live.userFuelPerLapL ?? p.fuelRate.value)} decimals={u.fuelUnit === 'gal' ? 3 : 2} step={0.01} unit={u.fuelUnit} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, u.fuelFromDisplay(v))} />
+            <NumInput size="sm" value={u.fuelVal(live.userFuelPerLapL ?? p.fuelRate.value)} decimals={u.fuelUnit === 'gal' ? 3 : 2} step={0.01} min={0.01} unit={u.fuelUnit} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, u.fuelFromDisplay(v))} />
           </div>
         ) : (
           <Stat k="Per lap" v={u.fpl(p.fuelRate.value)} u={`${u.fuelUnit}/lap`} className="right" h={p.fuelRate.measured ? <span className="tag-measured">MEASURED</span> : <span className="tag-assumption">ESTIMATE</span>} />

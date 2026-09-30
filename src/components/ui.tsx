@@ -217,10 +217,13 @@ export function NumInput({
         if (e.key === 'Enter') (e.currentTarget as HTMLInputElement).blur();
         if (e.key === 'ArrowUp' || e.key === 'ArrowDown') {
           e.preventDefault();
-          const n = Number(draft) || 0;
-          const v = n + (e.key === 'ArrowUp' ? step : -step) * (e.shiftKey ? 10 : 1);
+          const n = Number(draft.replace(',', '.'));
+          let v = (isFinite(n) && draft.trim() !== '' ? n : (value ?? 0)) + (e.key === 'ArrowUp' ? step : -step) * (e.shiftKey ? 10 : 1);
+          v = Number(v.toFixed(Math.max(decimals, 6)));
+          if (min != null) v = Math.max(min, v);
+          if (max != null) v = Math.min(max, v);
           setDraft(fmt(v));
-          onChange(v);
+          if (v !== value) onChange(v);
         }
       }}
     />

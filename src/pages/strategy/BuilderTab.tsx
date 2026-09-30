@@ -182,7 +182,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
             </select>
           </Field>
           <Field label="Target laps" hint={isLast ? 'Final stint runs to the flag' : undefined}>
-            <NumInput value={st.targetLaps} decimals={0} min={1} disabled={isLast} onChange={(v) => set({ targetLaps: Math.round(v) })} />
+            <NumInput value={isLast && s ? s.laps : st.targetLaps} decimals={0} min={1} disabled={isLast} onChange={(v) => set({ targetLaps: Math.round(v) })} />
           </Field>
           <Field label="Drive mode" hint="Effects are the user-defined values in Race Setup">
             <select className="select" value={st.mode} onChange={(e) => set({ mode: e.target.value as DriveMode })}>
@@ -197,7 +197,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
             <LapTimeInput value={st.lapTimeOverrideMs} onChange={(ms) => set({ lapTimeOverrideMs: ms })} onClear={() => set({ lapTimeOverrideMs: undefined })} />
           </Field>
           <Field group label={`Fuel/lap override (${u.fuelUnit})`} right={st.fuelPerLapOverrideL != null && <button className="btn xs ghost" onClick={() => set({ fuelPerLapOverrideL: undefined })}>clear</button>} hint="Blank = car value × driver factor">
-            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapOverrideL: undefined })} />
+            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0.01} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapOverrideL: undefined })} />
           </Field>
           {car.setup.energyEnabled ? (
             <Field group label="Energy budget (%)" right={st.energyTargetPct != null && <button className="btn xs ghost" onClick={() => set({ energyTargetPct: undefined })}>clear</button>} hint="Optional stint energy budget">
@@ -301,7 +301,7 @@ function StintResult({ s, tab }: { s: SimStint; tab: TabProps }) {
           <span className="v">
             {u.fuelU(s.fuelUsedL)} · {u.fpl(s.fuelPerLapL)}/lap
           </span>
-          <span className="k">At stop</span>
+          <span className="k">{s.final ? 'At flag' : 'At stop'}</span>
           <span className="v">{u.fuelU(s.fuelEndL)}</span>
           <span className="k">Margin</span>
           <span className={`v ${marginClass(s.fuelMarginLaps)}`}>{u.n(s.fuelMarginLaps, 2)} laps</span>
@@ -314,7 +314,7 @@ function StintResult({ s, tab }: { s: SimStint; tab: TabProps }) {
             <span className="v">
               {u.pct(s.energyUsedPct)} % · {u.n(s.energyPerLapPct, 2)}/lap
             </span>
-            <span className="k">At stop</span>
+            <span className="k">{s.final ? 'At flag' : 'At stop'}</span>
             <span className="v">{u.pct(s.energyEndPct)} %</span>
             <span className="k">Margin</span>
             <span className={`v ${marginClass(s.energyMarginLaps)}`}>{u.n(s.energyMarginLaps, 2)} laps</span>

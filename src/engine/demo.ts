@@ -4,7 +4,7 @@
  * noise — not LMU physics.
  */
 import { activeEventAt, calculateEnergyPerLap, calculateFuelPerLap, driverFuelFactor, getCompound, netEnergyPerLap, predictLapMs } from './model';
-import { cloneLive, makeCall, recordPitStop } from './liveOps';
+import { checkFlag, cloneLive, makeCall, recordPitStop } from './liveOps';
 import { projectLive } from './live';
 import { TEMPLATE_LABEL } from './model';
 import type { CarEntry, CarLive, Race, Settings } from './types';
@@ -158,9 +158,7 @@ export function demoAdvanceLap(race: Race, car: CarEntry, settings: Settings, o:
   live.gapBehindSec = Math.max(0.2, (live.gapBehindSec ?? 6.8) + gauss(rng) * 0.25);
   live.traffic = rng() < 0.15 ? 'heavy' : rng() < 0.4 ? 'light' : 'clear';
 
-  const done = race.params.lengthMode === 'laps' ? live.lapsCompleted >= race.params.laps : live.lastLapEndSec >= race.params.durationSec;
-  if (done) live.phase = 'finished';
-  return live;
+  return checkFlag(race.params, live);
 }
 
 /** Next lap end time without mutating state (for clock-driven auto laps). */

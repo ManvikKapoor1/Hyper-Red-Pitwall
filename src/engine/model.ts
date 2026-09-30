@@ -85,7 +85,8 @@ export function predictLapMs(ctx: LapContext): number {
   ms += (setup.modes[mode]?.lapSec ?? 0) * 1000;
   ms += setup.fuelEffectSecPerL * Math.max(0, fuelL) * 1000;
   if (event) ms += event.lapDeltaSec * 1000;
-  return ms;
+  // extreme offsets (negative deltas stacked) must never give a zero or negative lap
+  return Math.max(ms, 1000);
 }
 
 /** Fuel used per lap (L) for given conditions. */

@@ -84,7 +84,8 @@ export function blocksFromLive(car: CarEntry, p: LiveProjection) {
   const actual = blocksFromActual(car);
   const proj = blocksFromResult(p.sim);
   const blocks: TLBlock[] = [
-    ...actual.blocks.filter((b) => b.index < car.live.stintIndex),
+    // after the flag the stint being driven is complete too
+    ...actual.blocks.filter((b) => b.index < car.live.stintIndex || car.live.phase === 'finished'),
     ...proj.blocks.map((b, i) => (i === 0 && car.live.phase === 'racing' ? { ...b, kind: 'current' as const } : b)),
   ];
   const stops: TLStop[] = [...actual.stops, ...proj.stops.map((s, i) => ({ ...s, label: `PIT ${car.live.stops.length + i + 1} · L${s.lap}` }))];

@@ -205,4 +205,16 @@ describe('post-race totals', () => {
     expect(sum.stints.reduce((a, s) => a + s.fuelUsedL, 0)).toBeCloseTo(sum.fuelUsedL, 6);
     expect(sum.lapsCompleted).toBe(car.live.laps.length);
   });
+  test('deleting a lap keeps the total and the per-lap average', () => {
+    const race = createCompletedSample();
+    const car = race.cars[0];
+    const before = postRaceSummary(race, car);
+    // drop a mid-stint lap without a typed reading; the next lap's fuel drop now covers two laps
+    const victim = car.live.laps.find((l, i) => i > 3 && !l.pitIn && !car.live.laps[i + 1]?.pitIn && !car.live.stops.some((s) => s.lap === l.lap))!;
+    const next = car.live.laps.find((l) => l.lap === victim.lap + 1)!;
+    const cut = { ...car, live: { ...car.live, laps: car.live.laps.filter((l) => l !== victim).map((l) => (l === next ? { ...l, fuelUsedL: null } : l)) } };
+    const after = postRaceSummary(race, cut);
+    expect(after.fuelUsedL).toBeCloseTo(before.fuelUsedL, 6);
+    expect(after.avgFuelPerLapL).toBeCloseTo(before.avgFuelPerLapL, 6);
+  });
 });
