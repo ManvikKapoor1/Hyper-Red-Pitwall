@@ -344,3 +344,53 @@ fieldset.plain-fs:disabled {
     grid-column: auto;
   }
 }
+
+/* ── calls ──────────────────────────────────────────────────────────── */
+.calls-grid {
+  display: grid;
+  grid-template-columns: 440px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+}
+.sugg {
+  padding: 8px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--line-3);
+  border-radius: var(--r);
+}
+.sugg.p-CRITICAL {
+  border-left-color: var(--red);
+}
+.sugg.p-ACTION {
+  border-left-color: var(--amber);
+}
+.sugg.p-UPCOMING {
+  border-left-color: var(--blue);
+}
+.sugg-t {
+  font-family: var(--font-head);
+  font-weight: 700;
+  font-size: 19px;
+  letter-spacing: 0.04em;
+  margin: 4px 0 2px;
+}
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+}
+.call-cell {
+  font-family: var(--font-head);
+  font-weight: 600;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+}
+@media (max-width: 1100px) {
+  .calls-grid {
+    grid-template-columns: 1fr;
+  }
+}
