@@ -5,7 +5,9 @@ import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
 import { calculateFuelRemainingLaps, calculatePitLoss } from '../model';
 import { calculateStrategy } from '../simulate';
+import { withTirePattern } from '../planner';
 import { lapTrace, sliceTrace } from '../trace';
+import { fuelSensitivity, tireOptions } from '../whatif';
 import { validateRaceData } from '../validate';
 import { formatClock, formatLapMs, parseLapTime } from '../format';
 
@@ -78,5 +80,27 @@ describe('lap trace', () => {
   test('slices by stint and window', () => {
     expect(sliceTrace(trace, 'last30', car.live.stintIndex).length).toBe(Math.min(30, trace.length));
     expect(sliceTrace(trace, 'stint', car.live.stintIndex).every((t) => t.stint === car.live.stintIndex)).toBe(true);
+  });
+});
+
+describe('what-if', () => {
+  const race = createDemoRace();
+  const car = race.cars[0];
+  test('tire pattern keeps stint lengths and sets changes', () => {
+    const p = withTirePattern(car.plan, 2);
+    expect(p.stints.map((s) => s.targetLaps)).toEqual(car.plan.stints.map((s) => s.targetLaps));
+    expect(p.stints.slice(0, -1).map((s) => s.stop.changeTires)).toEqual([false, true, false, true, false, true, false, true]);
+    expect(p.stints[1].stop.template).toMatch(/TIRES/);
+  });
+  test('fuel sensitivity scales per-driver consumption', () => {
+    const rows = fuelSensitivity(race.params, car.setup, car.plan, car.drivers, [0, 8]);
+    expect(rows[1].result.fuelUsedL).toBeGreaterThan(rows[0].result.fuelUsedL * 1.05);
+    expect(rows[1].result.minFuelMarginLaps).toBeLessThanOrEqual(rows[0].result.minFuelMarginLaps);
+  });
+  test('tire options: A is the plan as entered', () => {
+    const opts = tireOptions(race.params, car.setup, car.plan, car.drivers);
+    expect(opts).toHaveLength(4);
+    expect(opts[0].plan).toBe(car.plan);
+    expect(opts[1].result.tireSets).toBeGreaterThanOrEqual(opts[3].result.tireSets);
   });
 });

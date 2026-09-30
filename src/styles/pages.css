@@ -1,0 +1,233 @@
+/* ── shared page helpers ────────────────────────────────────────────── */
+.span-2 {
+  grid-column: span 2;
+}
+.grid-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+  gap: 8px;
+  align-items: start;
+}
+.stat-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.scroll-x .panel-b {
+  overflow-x: auto;
+}
+ul.plain {
+  margin: 0;
+  padding-left: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  font-size: 12.5px;
+}
+.issues {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.drv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  max-width: 100%;
+}
+.drv-chip > i {
+  width: 4px;
+  height: 14px;
+  border-radius: 1px;
+  flex: none;
+}
+.drv-chip > b {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+.share-bar {
+  height: 8px;
+  background: var(--panel-3);
+  border-radius: 1px;
+  overflow: hidden;
+}
+.share-bar > i {
+  display: block;
+  height: 100%;
+  border-radius: 0 2px 2px 0;
+}
+
+/* ── strategy ───────────────────────────────────────────────────────── */
+.plan-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 30px;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+}
+.plan-summary .stat.lg .v {
+  font-size: 22px;
+}
+.builder {
+  display: grid;
+  grid-template-columns: 400px minmax(0, 1fr) 380px;
+  gap: 8px;
+  align-items: start;
+}
+.bld-flow {
+  position: sticky;
+  top: 54px;
+  max-height: calc(100vh - 70px);
+}
+.bld-flow > .panel-b {
+  overflow: auto;
+}
+.flow {
+  list-style: none;
+  margin: 0;
+  padding: 8px 10px 10px 10px;
+  position: relative;
+}
+.flow::before {
+  content: '';
+  position: absolute;
+  left: 21px;
+  top: 18px;
+  bottom: 18px;
+  width: 1px;
+  background: var(--line-2);
+}
+.flow-group {
+  display: flex;
+  flex-direction: column;
+}
+.flow-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+.flow-start,
+.flow-finish {
+  padding: 4px 0;
+}
+.flow-dot {
+  width: 23px;
+  height: 11px;
+  flex: none;
+  display: grid;
+  place-items: center;
+}
+.flow-dot::after {
+  content: '';
+  width: 9px;
+  height: 9px;
+  background: var(--text);
+  border: 2px solid var(--panel);
+  box-sizing: content-box;
+}
+.flow-t {
+  font-family: var(--font-head);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  font-size: 13px;
+}
+.flow-stint {
+  margin: 4px 0 4px 16px;
+  padding: 6px 6px 6px 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  cursor: pointer;
+}
+.flow-stint:hover {
+  border-color: var(--line-3);
+}
+.flow-stint.sel {
+  border-color: var(--text-2);
+  background: var(--panel-3);
+}
+.flow-stint.unused {
+  opacity: 0.55;
+  border-style: dashed;
+}
+.flow-bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+}
+.flow-act {
+  display: flex;
+  flex-direction: column;
+  flex-wrap: wrap;
+  height: 44px;
+  gap: 0;
+  opacity: 0.35;
+}
+.flow-stint:hover .flow-act,
+.flow-stint.sel .flow-act {
+  opacity: 1;
+}
+.flow-act .btn.icon {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+}
+.flow-pit {
+  margin: 0 0 0 16px;
+  padding: 3px 6px 3px 0;
+  font-size: 12px;
+}
+.flow-pin {
+  position: absolute;
+  left: -2px;
+  width: 9px;
+  height: 9px;
+  transform: rotate(45deg);
+  border: 1px solid var(--line-3);
+  background: var(--panel);
+}
+.flow-pit > .grow {
+  padding-left: 16px;
+}
+.deg-grid {
+  display: grid;
+  gap: 12px;
+}
+.deg-grid .lc {
+  flex: none;
+}
+
+@media (max-width: 1500px) {
+  .builder {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+  .builder > :last-child {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 1100px) {
+  .builder,
+  .grid-side {
+    grid-template-columns: 1fr;
+  }
+  .bld-flow {
+    position: static;
+    max-height: none;
+  }
+}
+.kv-grid {
+  gap: 10px 28px;
+}

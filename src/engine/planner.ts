@@ -162,11 +162,30 @@ export function buildPlan(race: RaceParams, setup: CarSetup, drivers: Driver[], 
   plan.stints.forEach((s, i) => {
     const next = plan.stints[i + 1];
     if (!next || i < keep.length - 1) return;
-    const drv = next.driverId !== s.driverId;
-    if (s.stop.template !== 'EMERGENCY' && s.stop.template !== 'CUSTOM')
-      s.stop.template = s.stop.changeTires ? (drv ? 'FUEL_TIRES_DRIVER' : 'FUEL_TIRES') : drv ? 'FUEL_DRIVER' : 'FUEL_ONLY';
+    if (s.stop.template !== 'EMERGENCY' && s.stop.template !== 'CUSTOM') s.stop.template = templateFor(s.stop.changeTires, next.driverId !== s.driverId);
   });
   return plan;
+}
+
+/** Template implied by the work done at a stop that takes fuel. */
+export function templateFor(tires: boolean, driverChange: boolean): PitTemplate {
+  return tires ? (driverChange ? 'FUEL_TIRES_DRIVER' : 'FUEL_TIRES') : driverChange ? 'FUEL_DRIVER' : 'FUEL_ONLY';
+}
+
+/**
+ * Re-pattern tire changes without touching stint lengths or drivers.
+ * every = 1 → every stop, 2 → double stints, 3 → triple stints, 0 → never.
+ */
+export function withTirePattern(plan: StrategyPlan, every: number): StrategyPlan {
+  const p = clonePlan(plan);
+  p.stints.forEach((s, i) => {
+    const next = p.stints[i + 1];
+    if (!next) return;
+    const change = every > 0 && (i + 1) % every === 0;
+    s.stop = { ...s.stop, changeTires: change };
+    if (s.stop.template !== 'EMERGENCY' && s.stop.template !== 'CUSTOM' && s.stop.template !== 'DRIVER_ONLY') s.stop.template = templateFor(change, next.driverId !== s.driverId);
+  });
+  return p;
 }
 
 /**

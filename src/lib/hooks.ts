@@ -38,11 +38,13 @@ export function useLive(race: Race, car: CarEntry, nowSec: number) {
   }, [race, car, settings, sec]);
 }
 
-export function usePlanResult(race: Race, car: CarEntry) {
+/** Pre-race simulation of the car's plan. Planned scenarios are opt-in (Simulation tab). */
+export function usePlanResult(race: Race, car: CarEntry, withPlannedEvents = false) {
   const settings = useStore((s) => s.settings);
+  const events = withPlannedEvents ? race.plannedEvents : undefined;
   return useMemo(
-    () => calculateStrategy(race.params, car.setup, car.plan, car.drivers, { earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps, events: race.plannedEvents }),
-    [race.params, car.setup, car.plan, car.drivers, race.plannedEvents, settings.defaults.earlyPitThresholdLaps],
+    () => calculateStrategy(race.params, car.setup, car.plan, car.drivers, { earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps, events }),
+    [race.params, car.setup, car.plan, car.drivers, events, settings.defaults.earlyPitThresholdLaps],
   );
 }
 

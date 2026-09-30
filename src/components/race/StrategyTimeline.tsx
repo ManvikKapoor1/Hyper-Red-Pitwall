@@ -102,6 +102,7 @@ export function StrategyTimeline({
   selected,
   onSelect,
   headerRight,
+  labels,
 }: {
   car: CarEntry;
   blocks: TLBlock[];
@@ -119,6 +120,7 @@ export function StrategyTimeline({
   selected?: number;
   onSelect?: (i: number) => void;
   headerRight?: ReactNode;
+  labels?: { plan?: string; actual?: string };
 }) {
   const [zoom, setZoom] = useState(1);
   const scroller = useRef<HTMLDivElement>(null);
@@ -143,8 +145,8 @@ export function StrategyTimeline({
 
   const nowX = nowLap != null ? (axis === 'lap' ? posLap(nowLap) : undefined) : undefined;
   const lanes = [
-    { key: 'plan', label: actual ? 'PLAN' : nowLap != null ? 'STRATEGY' : 'PLAN', data: { blocks, stops } },
-    ...(actual ? [{ key: 'actual', label: 'ACTUAL', data: actual }] : []),
+    { key: 'plan', label: labels?.plan ?? (actual ? 'PLAN' : nowLap != null ? 'STRATEGY' : 'PLAN'), data: { blocks, stops } },
+    ...(actual ? [{ key: 'actual', label: labels?.actual ?? 'ACTUAL', data: actual }] : []),
   ];
 
   return (

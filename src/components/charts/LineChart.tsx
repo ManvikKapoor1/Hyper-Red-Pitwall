@@ -37,7 +37,7 @@ export interface LineChartProps {
   series: ChartSeries[];
   markers?: ChartMarker[];
   bands?: ChartBand[];
-  vlines?: { x: number; label?: string }[];
+  vlines?: { x: number; label?: string; anchor?: 'start' | 'end' }[];
   hlines?: { y: number; label?: string; color?: string }[];
   xDomain?: [number, number];
   yDomain?: [number, number];
@@ -232,7 +232,7 @@ export function LineChart(props: LineChartProps) {
             <g key={i}>
               <line className="lc-vline" x1={sx(v.x)} x2={sx(v.x)} y1={PAD.t} y2={PAD.t + ih} />
               {v.label && (
-                <text className="lc-vlabel" x={sx(v.x) + 3} y={PAD.t + 8}>
+                <text className="lc-vlabel" x={sx(v.x) + (v.anchor === 'end' ? -3 : 3)} y={PAD.t + 8} textAnchor={v.anchor ?? 'start'}>
                   {v.label}
                 </text>
               )}
