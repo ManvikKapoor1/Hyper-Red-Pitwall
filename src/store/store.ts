@@ -250,6 +250,8 @@ export const useStore = create<AppState>()(
         setActiveCar: (raceId, carId) => mapRace(raceId, (r) => ({ ...r, activeCarId: carId })),
         addCar: (raceId) =>
           mapRace(raceId, (r) => {
+            // a car added after the start would never take the green flag
+            if (r.status === 'LIVE' || r.status === 'FINISHED') return r;
             const src = r.cars.find((c) => c.id === r.activeCarId) ?? r.cars[0];
             const nums = r.cars.map((c) => Number(c.number)).filter((n) => isFinite(n));
             const car = newCar(r.params, get().settings, String((nums.length ? Math.max(...nums) : 0) + 1), src?.teamName ?? 'Team');
@@ -589,7 +591,9 @@ export const useStore = create<AppState>()(
 /** Ends each car's race at the flag; the race finishes when every car has. */
 function settleFlag(r: Race): Race {
   const cars = r.cars.map((c) => ({ ...c, live: checkFlag(r.params, c.live) }));
-  if (!cars.every((c) => c.live.phase === 'finished')) return { ...r, cars };
+  // cars that never started (e.g. still on the grid) do not hold the race open
+  const started = cars.filter((c) => c.live.phase === 'racing' || c.live.phase === 'finished');
+  if (!started.length || !started.every((c) => c.live.phase === 'finished')) return { ...r, cars };
   const end = Math.max(...cars.map((c) => c.live.lastLapEndSec));
   return { ...r, cars, status: 'FINISHED', clock: { ...r.clock, running: false, anchorRaceSec: end, anchorEpochMs: Date.now() } };
 }

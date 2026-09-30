@@ -44,7 +44,12 @@ function RaceSetup({ race, car }: { race: Race; car: CarEntry }) {
             <Panel
               title="Cars"
               meta={
-                <button className="btn xs" onClick={() => addCar(race.id)} title="Add a car (copies the active car's setup and plan)">
+                <button
+                  className="btn xs"
+                  disabled={race.status === 'LIVE' || race.status === 'FINISHED'}
+                  onClick={() => addCar(race.id)}
+                  title={race.status === 'LIVE' || race.status === 'FINISHED' ? 'Cars can only be added before the start' : "Add a car (copies the active car's setup and plan)"}
+                >
                   <IconPlus size={12} /> Add car
                 </button>
               }
