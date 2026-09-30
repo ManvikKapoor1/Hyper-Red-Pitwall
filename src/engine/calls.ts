@@ -213,15 +213,16 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
           altAction: avail > 0 ? { type: 'mode', mode: saveMode } : undefined,
         });
       } else {
+        const pushing = live.driveMode === 'push';
         calls.push({
           key: 'PUSH_TO_FLAG',
-          text: 'PUSH TO THE FLAG',
+          text: pushing ? 'KEEP PUSHING TO THE FLAG' : 'PUSH TO THE FLAG',
           priority: 'INFO',
-          reasons: [`Fuel margin at flag ${f1(marginLaps)} laps`, setup.energyEnabled ? `Energy margin ${f1(eMargin)} laps` : 'No further stops planned', 'Push mode still keeps the margin (entered effect)'],
+          reasons: [`Fuel margin at flag ${f1(marginLaps)} laps`, setup.energyEnabled ? `Energy margin ${f1(eMargin)} laps` : 'No further stops planned', pushing ? 'Push mode keeps the margin' : 'Push mode still keeps the margin (entered effect)'],
           confidence: conf,
           alternative: 'MAINTAIN PACE',
           category: 'info',
-          action: { type: 'mode', mode: 'push' },
+          action: pushing ? undefined : { type: 'mode', mode: 'push' },
         });
       }
     } else if (resSafe <= 0) {
@@ -405,7 +406,9 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   // energy
   if (setup.energyEnabled && !p.isFinalStint && p.energyRate.value > 0 && !live.pitPhase) {
     const surplusLaps = (p.energyAtPitPct - setup.energyReservePct) / p.energyRate.value;
-    if (p.energySavePct > 0.5 && !calls.some((c) => c.key === 'ENERGY_SAVE'))
+    // only a saving the energy-save mode can actually deliver (else the box call above covers it)
+    const reachable = p.energySavePct <= modeSaving(setup, live.driveMode, 'energySave', 'energy');
+    if (p.energySavePct > 0.5 && reachable && !calls.some((c) => c.key === 'ENERGY_SAVE' || c.key === 'BOX_EARLY'))
       calls.push({ key: 'ENERGY_SAVE', text: `ENERGY SAVE ${f1(p.energySavePct)}%`, priority: 'ACTION', reasons: [`Need ${f2(p.energyRequiredPerLap)} %/lap to reach lap ${T}`, `Current ${f2(p.energyRate.value)} %/lap`], confidence: p.energyRate.confidence, category: 'energy', action: { type: 'mode', mode: 'energySave' } });
     else if (surplusLaps >= 1.5)
       calls.push({ key: 'ENERGY_DEPLOY', text: `ENERGY DEPLOY +${f1(p.energyAtPitPct - setup.energyReservePct)}%`, priority: 'INFO', reasons: [`Projected ${f1(p.energyAtPitPct)}% at pit vs reserve ${setup.energyReservePct}%`], confidence: p.energyRate.confidence, category: 'energy' });

@@ -544,12 +544,24 @@ export const useStore = create<AppState>()(
           const d = data as Partial<AppState>;
           if (!d || !Array.isArray(d.races) || !d.races.every(isRaceLike)) return false;
           const lib = (d.library ?? {}) as Partial<Library>;
-          const library: Library = {
-            strategies: Array.isArray(lib.strategies) ? lib.strategies : [],
-            tracks: Array.isArray(lib.tracks) ? lib.tracks : [],
-            teams: Array.isArray(lib.teams) ? lib.teams : [],
+          const incoming = d.races.map(normalizeRace);
+          // merge: races and library items from the file replace ones with the same id, the rest stay
+          const byId = <T extends { id: string }>(mine: T[], theirs: unknown): T[] => {
+            const add = Array.isArray(theirs) ? (theirs as T[]).filter((x) => x && typeof x.id === 'string') : [];
+            const ids = new Set(add.map((x) => x.id));
+            return [...mine.filter((x) => !ids.has(x.id)), ...add];
           };
-          set((s) => ({ races: d.races!, settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings, library, activeRaceId: d.races![0]?.id ?? null, seeded: true }));
+          set((s) => ({
+            races: byId(s.races, incoming),
+            settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings,
+            library: {
+              strategies: byId(s.library.strategies, lib.strategies),
+              tracks: byId(s.library.tracks, lib.tracks),
+              teams: [...new Set([...s.library.teams, ...(Array.isArray(lib.teams) ? lib.teams.filter((t) => typeof t === 'string') : [])])],
+            },
+            activeRaceId: incoming[0]?.id ?? s.activeRaceId,
+            seeded: true,
+          }));
           return true;
         },
         resetAll: () => {
@@ -596,6 +608,20 @@ function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
     out = mapCar(out, c0.id, () => c);
   }
   return out;
+}
+
+/** Fills lists that older exports may lack, so every page can rely on them. */
+function normalizeRace(r: Race): Race {
+  return {
+    ...r,
+    events: r.events ?? [],
+    plannedEvents: Array.isArray(r.plannedEvents) ? r.plannedEvents : [],
+    cars: r.cars.map((c) => ({
+      ...c,
+      versions: Array.isArray(c.versions) ? c.versions : [],
+      live: { ...c.live, stops: c.live.stops ?? [], calls: c.live.calls ?? [], inputs: c.live.inputs ?? [] },
+    })),
+  };
 }
 
 /** Minimal structural check so a bad import cannot brick the app on reload. */

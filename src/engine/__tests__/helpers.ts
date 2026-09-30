@@ -211,6 +211,7 @@ export function followRace(seed: number, fuelBias: number, energyBias: number, l
     const p = projectLive(race, car, followSettings, t0);
     const calls = generateRaceCalls(race, car, p, followSettings);
     const top = calls[0];
+    for (const k of callProblems(calls, live.driveMode, p.currentLap)) problems.push(`lap ${p.currentLap}: ${k}`);
     // obey mode calls
     if (top?.action?.type === 'mode' && top.action.mode !== live.driveMode) car.live = { ...cloneLive(live), driveMode: top.action.mode };
     const lap = car.live.lapsCompleted + 1;
@@ -286,3 +287,19 @@ export function followRace(seed: number, fuelBias: number, energyBias: number, l
   return problems;
 }
 
+
+/** Calls must be actionable: no switch to the mode already set, no box lap in the past, no duplicates. */
+export function callProblems(calls: ReturnType<typeof generateRaceCalls>, mode: string, currentLap: number): string[] {
+  const out: string[] = [];
+  const keys = new Set<string>();
+  for (const call of calls) {
+    const txt = `${call.text} ${call.reasons.join(' ')} ${call.alternative ?? ''}`;
+    if (/NaN|undefined|Infinity|null/.test(txt)) out.push(`unreadable call "${txt}"`);
+    if (keys.has(call.key)) out.push(`duplicate call ${call.key}`);
+    keys.add(call.key);
+    if (call.action?.type === 'mode' && call.action.mode === mode) out.push(`"${call.text}" switches to the mode already set`);
+    for (const a of [call.action, call.altAction]) if (a?.type === 'boxLap' && a.lap < currentLap) out.push(`"${call.text}" boxes on past lap ${a.lap}`);
+    if (call.boxLap != null && call.boxLap < currentLap) out.push(`"${call.text}" box lap ${call.boxLap} before lap ${currentLap}`);
+  }
+  return out;
+}

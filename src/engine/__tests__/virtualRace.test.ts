@@ -12,7 +12,7 @@ import { applyQuickUpdate, checkFlag, prepareGrid, recordPitStop, startRaceLive 
 import { calculateStrategy, type StrategyResult } from '../simulate';
 import type { CarEntry, Race } from '../types';
 import { validateRaceData, type QuickUpdateInput } from '../validate';
-import { checkResult, randomCase, type Case } from './helpers';
+import { callProblems, checkResult, randomCase, type Case } from './helpers';
 
 const settings = DEFAULT_SETTINGS;
 
@@ -116,10 +116,7 @@ function playRace(c: Case, exact: boolean): RunReport {
         problems.push(`${where}: fuel rate ${p.fuelRate.value.toFixed(4)} vs next lap ${nextLap.fuelUsedL.toFixed(4)}`);
     }
     // call texts are readable
-    for (const call of generateRaceCalls(race, car, p, settings)) {
-      const txt = `${call.text} ${call.reasons.join(' ')} ${call.alternative ?? ''}`;
-      if (/NaN|undefined|Infinity|null/.test(txt)) problems.push(`${where}: call "${txt}"`);
-    }
+    for (const k of callProblems(generateRaceCalls(race, car, p, settings), car.live.driveMode, p.currentLap)) problems.push(`${where}: ${k}`);
     if (problems.length > 6) break;
   }
   // live record matches what happened

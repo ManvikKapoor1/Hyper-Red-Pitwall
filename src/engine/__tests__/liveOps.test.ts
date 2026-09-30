@@ -4,6 +4,7 @@ import { DEFAULT_SETTINGS } from '../factory';
 import { measureFuelPerLap, projectLive, referenceLapMs } from '../live';
 import { applyQuickUpdate, checkFlag, recordPitStop } from '../liveOps';
 import { validateRaceData } from '../validate';
+import { generateRaceCalls } from '../calls';
 
 const race = createDemoRace();
 const car = race.cars[0];
@@ -135,5 +136,29 @@ describe('chequered flag', () => {
     expect(checkFlag(params, one).phase).toBe('racing');
     const two = applyQuickUpdate({ ...car, live: one }, { lapsCompleted: L.lapsCompleted + 2 }, L.lastLapEndSec + 192, DEFAULT_SETTINGS);
     expect(checkFlag(params, two).phase).toBe('finished');
+  });
+});
+
+describe('strategist overrides', () => {
+  test('box-lap override moves the next stop and the rest of the plan follows', () => {
+    const p0 = projectLive(race, car, DEFAULT_SETTINGS, L.lastLapEndSec);
+    const target = Math.max(p0.currentLap, p0.window.target - 3);
+    const c = { ...car, live: { ...L, pitLapOverrides: { ...L.pitLapOverrides, [L.stintIndex]: target } } };
+    const p1 = projectLive({ ...race, cars: [c] }, c, DEFAULT_SETTINGS, L.lastLapEndSec);
+    expect(p1.sim.stops[0].lap).toBe(target);
+    expect(p1.window.target).toBe(target);
+    // still covers the race
+    expect(p1.finishSec).toBeGreaterThanOrEqual(race.params.durationSec);
+  });
+  test('an override past the fuel range is reported, not silently accepted', () => {
+    const p0 = projectLive(race, car, DEFAULT_SETTINGS, L.lastLapEndSec);
+    const c = { ...car, live: { ...L, pitLapOverrides: { ...L.pitLapOverrides, [L.stintIndex]: p0.currentLap + Math.ceil(p0.fuelRange.theoretical) + 3 } } };
+    const p1 = projectLive({ ...race, cars: [c] }, c, DEFAULT_SETTINGS, L.lastLapEndSec);
+    expect(p1.sim.issues.some((i) => i.code === 'FUEL_OUT' || i.code === 'STINT_BEYOND_SAFE')).toBe(true);
+    const calls = generateRaceCalls({ ...race, cars: [c] }, c, p1, DEFAULT_SETTINGS);
+    // box before the range ends; never ask for a saving the save mode cannot give
+    expect(calls[0].text).toMatch(/^BOX/);
+    expect(calls[0].boxLap!).toBeLessThanOrEqual(p0.currentLap + Math.ceil(p0.fuelRange.theoretical));
+    expect(calls.some((x) => /SAVE/.test(x.text) && x.action?.type === 'mode')).toBe(false);
   });
 });

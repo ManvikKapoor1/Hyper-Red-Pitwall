@@ -32,7 +32,10 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
   const [note, setNote] = useState('');
   const ev = activeEventAt(race.events, nowSec);
   const stat = stationary ?? est.stationarySec;
-  const tot = total ?? (ev?.pitLossUnderEventSec != null ? ev.pitLossUnderEventSec + stat : est.laneSec + stat);
+  const laneSec = ev?.pitLossUnderEventSec ?? est.laneSec;
+  const tot = total ?? laneSec + stat;
+  // the car cannot lose less time in the pits than it stood still
+  const badLoss = tot < stat;
 
   return (
     <Modal
@@ -46,6 +49,7 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
           </button>
           <button
             className="btn go"
+            disabled={badLoss}
             onClick={() => {
               recordStop(race.id, car.id, {
                 inLap,
@@ -120,10 +124,11 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
         <Field label="Stationary (s)" hint={`Estimate ${u.n(est.stationarySec, 1)} s`}>
           <NumInput value={stat} decimals={1} min={0} onChange={setStationary} />
         </Field>
-        <Field label="Total pit loss (s)" hint={`Estimate ${u.n(est.laneSec + est.stationarySec, 1)} s`}>
+        <Field label="Total pit loss (s)" hint={`Estimate ${u.n(laneSec + stat, 1)} s`}>
           <NumInput value={tot} decimals={1} min={0} onChange={setTotal} />
         </Field>
       </div>
+      {badLoss && <div className="notice red mt-8">Total pit loss ({u.n(tot, 1)} s) is shorter than the stationary time ({u.n(stat, 1)} s).</div>}
       <Field label="Note" className="mt-8">
         <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional — e.g. slow left-rear" />
       </Field>
