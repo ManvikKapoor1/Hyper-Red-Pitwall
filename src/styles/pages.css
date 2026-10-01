@@ -464,7 +464,7 @@ fieldset.plain-fs:disabled {
 }
 .ld-hero {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 620px);
+  grid-template-columns: minmax(0, 860px);
   gap: 48px;
   align-items: center;
   max-width: 1440px;

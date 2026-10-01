@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { createCompletedSample, createDemoRace, createUpcomingSample } from '../data/samples';
 import { demoAdvanceLap } from '../engine/demo';
 import { DEFAULT_SETTINGS, makeDriver, newCar, newRace, nextVersion, versionOf } from '../engine/factory';
 import { fuelText } from '../engine/format';
@@ -86,7 +85,6 @@ export interface AppState {
 
   seedSamples: () => void;
   createRace: (params?: Partial<RaceParams>) => string;
-  loadDemo: () => string;
   deleteRace: (id: string) => void;
   duplicateRace: (id: string) => string;
   setActiveRace: (id: string) => void;
@@ -198,36 +196,12 @@ export const useStore = create<AppState>()(
         },
         dismissToast: (id) => set((s) => ({ toasts: s.toasts.filter((t) => t.id !== id) })),
 
-        seedSamples: () => {
-          const st = get().settings;
-          const demo = createDemoRace(st);
-          const done = createCompletedSample(st);
-          const upcoming = createUpcomingSample(st);
-          set((s) => ({
-            races: [demo, upcoming, done, ...s.races.filter((r) => ![demo.id, done.id, upcoming.id].includes(r.id))],
-            activeRaceId: s.activeRaceId ?? demo.id,
-            seeded: true,
-            library: {
-              ...s.library,
-              tracks: s.library.tracks.length
-                ? s.library.tracks
-                : [
-                    { id: uid('trk'), name: 'Fuji Speedway', lengthKm: 4.563, notes: 'Sample entry' },
-                    { id: uid('trk'), name: 'Circuit de Spa-Francorchamps', lengthKm: 7.004, notes: 'Sample entry' },
-                    { id: uid('trk'), name: 'Circuit de la Sarthe', lengthKm: 13.626, notes: 'Sample entry' },
-                  ],
-            },
-          }));
-        },
+        // no demo or sample races: the app starts empty, ready for real races
+        seedSamples: () => set({ seeded: true }),
 
         createRace: (params) => {
           const r = newRace(get().settings, params);
           set((s) => ({ races: [r, ...s.races], activeRaceId: r.id }));
-          return r.id;
-        },
-        loadDemo: () => {
-          const r = createDemoRace(get().settings);
-          set((s) => ({ races: [r, ...s.races.filter((x) => x.id !== r.id)], activeRaceId: r.id }));
           return r.id;
         },
         deleteRace: (id) => set((s) => ({ races: s.races.filter((r) => r.id !== id), activeRaceId: s.activeRaceId === id ? (s.races.find((r) => r.id !== id)?.id ?? null) : s.activeRaceId })),
@@ -578,12 +552,16 @@ export const useStore = create<AppState>()(
     {
       name: 'stint.v1',
       // v2: safety car / FCY / VSC / slow zone / red flag removed (not in LMU)
-      version: 2,
+      // v3: demo and sample races removed
+      version: 3,
       migrate: (persisted, version) => {
         const p = (persisted ?? {}) as Partial<AppState>;
         const races = Array.isArray(p.races) ? p.races.filter(isRaceLike).map(normalizeRace) : [];
-        // sample races are rebuilt with the current scenarios on the next load
-        return version < 2 ? { ...p, races: races.filter((r) => !r.sample && !r.isDemo), seeded: false } : { ...p, races };
+        if (version >= 3) return { ...p, races };
+        const kept = races.filter((r) => !r.sample && !r.isDemo);
+        const tracks = (p.library?.tracks ?? []).filter((t) => t.notes !== 'Sample entry');
+        const activeRaceId = kept.some((r) => r.id === p.activeRaceId) ? p.activeRaceId : (kept[0]?.id ?? null);
+        return { ...p, races: kept, activeRaceId, library: p.library ? { ...p.library, tracks } : p.library };
       },
       storage: createJSONStorage(() => storageAdapter),
       partialize: (s) => ({ races: s.races, settings: s.settings, activeRaceId: s.activeRaceId, library: s.library, seeded: s.seeded }),

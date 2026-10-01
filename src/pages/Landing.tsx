@@ -1,12 +1,5 @@
-import { useMemo } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import type { Race } from '../engine/types';
-import { PriorityBadge } from '../components/race/RaceStatusBadge';
-import { blocksFromLive, StrategyTimeline } from '../components/race/StrategyTimeline';
-import { Logo, SampleBadge } from '../components/ui';
-import { activeCar, useLive } from '../lib/hooks';
-import { useUnits } from '../lib/units';
-import { useStore } from '../store/store';
+import { Link } from 'react-router-dom';
+import { Logo } from '../components/ui';
 
 const FEATURES = [
   {
@@ -32,16 +25,13 @@ const FEATURES = [
 ];
 
 const PRINCIPLES = [
-  ['Your numbers only', 'Every projection comes from values you entered, explicit assumptions or calculations. Demo values are labelled SAMPLE DATA.'],
+  ['Your numbers only', 'Every projection comes from values you entered, explicit assumptions or calculations.'],
   ['No “best” strategy', 'Alternatives get neutral tags — lower pit loss, higher fuel margin, higher risk. The strategist decides.'],
   ['Colour means state', 'Green OK, amber warning, red critical, blue info and main actions, violet energy. Nothing else is coloured.'],
   ['Stays on your machine', 'Runs in the browser and stores data locally. Export and import JSON whenever you like.'],
 ];
 
 export function LandingPage() {
-  const nav = useNavigate();
-  const loadDemo = useStore((s) => s.loadDemo);
-  const demo = useStore((s) => s.races.find((r) => r.isDemo));
   return (
     <div className="landing">
       <header className="ld-nav">
@@ -50,9 +40,6 @@ export function LandingPage() {
           <Link className="btn ghost sm" to="/app">
             Races
           </Link>
-          <button className="btn sm" onClick={() => nav(`/app/race/${loadDemo()}/live`)}>
-            Live demo
-          </button>
           <Link className="btn primary sm" to="/app">
             Open pitwall
           </Link>
@@ -74,12 +61,8 @@ export function LandingPage() {
             <Link className="btn primary lg" to="/app">
               Open pitwall
             </Link>
-            <button className="btn lg" onClick={() => nav(`/app/race/${loadDemo()}/live`)}>
-              Try the 6H Fuji demo
-            </button>
           </div>
         </div>
-        {demo && <DemoPreview race={demo} />}
       </section>
 
       <section className="ld-features">
@@ -103,55 +86,8 @@ export function LandingPage() {
 
       <footer className="ld-foot">
         <Logo size={14} />
-        <span className="sublabel">Unofficial tool for sim-racing teams. Not affiliated with Le Mans Ultimate or its developers. Demo values are illustrative SAMPLE DATA, not LMU physics.</span>
+        <span className="sublabel">Unofficial tool for sim-racing teams. Not affiliated with Le Mans Ultimate or its developers.</span>
       </footer>
-    </div>
-  );
-}
-
-/** Real engine output on the demo race — so the preview never shows invented numbers. */
-function DemoPreview({ race }: { race: Race }) {
-  const u = useUnits();
-  const car = activeCar(race);
-  const { p, calls } = useLive(race, car, race.clock.anchorRaceSec);
-  const top = calls[0];
-  const tl = useMemo(() => blocksFromLive(car, p), [car, p]);
-  return (
-    <div className="ld-preview">
-      <div className="row between">
-        <span className="label">
-          {race.params.name} · #{car.number} · lap {p.currentLap}
-        </span>
-        <SampleBadge />
-      </div>
-      {top && (
-        <div className={`ld-call pr-${top.priority}`}>
-          <PriorityBadge p={top.priority} size="sm" />
-          <div className="ld-call-t">{top.text}</div>
-          <div className="sublabel">{top.reasons[0]}</div>
-        </div>
-      )}
-      <div className="ld-kpis">
-        <div>
-          <span className="label">Fuel</span>
-          <b className="mono">{u.fuelU(car.live.fuelL)}</b>
-        </div>
-        <div>
-          <span className="label">Per lap</span>
-          <b className="mono">{u.fpl(p.fuelRate.value)}</b>
-        </div>
-        <div>
-          <span className="label">Pit window</span>
-          <b className="mono">{p.isFinalStint ? 'FLAG' : p.window.earliest === p.window.latest ? `L${p.window.latest}` : `L${p.window.earliest}–${p.window.latest}`}</b>
-        </div>
-        {car.setup.energyEnabled && (
-          <div>
-            <span className="label c-violet">Energy</span>
-            <b className="mono">{u.pct(car.live.energyPct)} %</b>
-          </div>
-        )}
-      </div>
-      <StrategyTimeline car={car} blocks={tl.blocks} stops={tl.stops} totalLaps={Math.max(p.totalLaps, car.live.lapsCompleted)} totalSec={Math.max(p.finishSec, race.params.durationSec)} nowLap={p.currentLap} zoomable={false} compact />
     </div>
   );
 }

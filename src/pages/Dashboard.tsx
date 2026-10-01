@@ -5,7 +5,7 @@ import { liveSimOptions, raceNowSec } from '../engine/live';
 import { calculateStrategy } from '../engine/simulate';
 import type { Race } from '../engine/types';
 import { RaceStatusBadge } from '../components/race/RaceStatusBadge';
-import { IconCopy, IconLive, IconPlus, IconTrash } from '../components/icons';
+import { IconCopy, IconPlus, IconTrash } from '../components/icons';
 import { Panel, SampleBadge, Stat } from '../components/ui';
 import { useStore } from '../store/store';
 
@@ -19,7 +19,6 @@ export function DashboardPage() {
   const races = useStore((s) => s.races);
   const library = useStore((s) => s.library);
   const createRace = useStore((s) => s.createRace);
-  const loadDemo = useStore((s) => s.loadDemo);
   const nav = useNavigate();
   const sorted = useMemo(() => [...races].sort((a, b) => a.params.startTimeISO.localeCompare(b.params.startTimeISO)), [races]);
   return (
@@ -32,9 +31,6 @@ export function DashboardPage() {
           <div className="sub">Plan stints, run the pitwall live and review afterwards. STINT suggests calls — you decide and relay them.</div>
         </div>
         <div className="actions">
-          <button className="btn" onClick={() => nav(`/app/race/${loadDemo()}/live`)} title="Reload the 6H Fuji demo (SAMPLE DATA) in live mode">
-            <IconLive size={14} /> Live demo
-          </button>
           <button className="btn primary" onClick={() => nav(`/app/race/${createRace()}/setup`)}>
             <IconPlus size={14} /> New race
           </button>
