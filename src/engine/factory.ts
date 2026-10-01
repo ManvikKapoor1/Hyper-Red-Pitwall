@@ -94,8 +94,6 @@ export function defaultRaceParams(): RaceParams {
     airTempC: 22,
     trackTempC: 30,
     rainProbabilityPct: 0,
-    safetyCarAssumption: 'Not modelled unless added as a scenario',
-    slowZoneAssumption: 'Not modelled unless added as a scenario',
   };
 }
 

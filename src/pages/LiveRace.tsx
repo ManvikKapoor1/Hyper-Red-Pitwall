@@ -58,11 +58,11 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
       l: () => race.isDemo && demoAdvance(race.id, 1),
       ' ': () => car.live.phase === 'racing' && setClockRunning(race.id, !race.clock.running),
       c: () => {
-        if (!top) return;
+        if (!top || car.live.phase === 'finished') return;
         logCall(race.id, car.id, top.text, top.priority, top.reasons.join(' · '), 'ISSUED', 'system');
         apply(top.action, `Call accepted: ${top.text}`);
       },
-      o: () => setOverride(true),
+      o: () => car.live.phase !== 'finished' && setOverride(true),
       p: () => car.live.phase === 'racing' && setStop({}),
       f: () => setFocus((f) => !f),
     },
@@ -119,7 +119,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
               {p.current && (
                 <tr className="cur">
                   <td className="mono">S{p.current.index + 1}</td>
-                  <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, p.current.driverId)}</td>
+                  <td className="ellipsis">{driverName(car, p.current.driverId)}</td>
                   <td className="n">{p.current.laps}</td>
                   <td className="n">{p.current.final ? 'FLAG' : p.current.endLap}</td>
                   <td className="dim">NOW</td>
@@ -135,10 +135,10 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
                 return (
                   <tr key={s.index}>
                     <td className="mono">S{s.index + 1}</td>
-                    <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, s.driverId)}</td>
+                    <td className="ellipsis">{driverName(car, s.driverId)}</td>
                     <td className="n">{s.laps}</td>
                     <td className="n">{s.final ? 'FLAG' : s.endLap}</td>
-                    <td className="ellipsis" style={{ maxWidth: 170 }}>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
+                    <td>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
                     <td className={s.newTires ? '' : 'dim'}>{s.newTires ? `NEW ${s.compound}` : `${s.compound} +${s.tireAgeStart}`}</td>
                     <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
                     <td className={`n ${marginClass(s.fuelMarginLaps, crit)}`}>{u.n(s.fuelMarginLaps, 1)}</td>
@@ -152,7 +152,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         </Panel>
         <WhereToGain race={race} car={car} />
         <Panel className="live-scen" bodyClass="tight">
-          <ScenarioPanel race={race} car={car} p={p} nowSec={nowSec} />
+          <ScenarioPanel race={race} car={car} nowSec={nowSec} />
           <AlertPanel alerts={alerts} />
         </Panel>
       </div>
@@ -173,7 +173,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         </Panel>
       </div>
       {override && <OverrideModal race={race} car={car} p={p} call={top} onClose={() => setOverride(false)} />}
-      {stop && <PitStopRecorder race={race} car={car} p={p} nowSec={nowSec} prefill={stop} onClose={() => setStop(null)} />}
+      {stop && <PitStopRecorder race={race} car={car} p={p} prefill={stop} onClose={() => setStop(null)} />}
     </div>
   );
 }

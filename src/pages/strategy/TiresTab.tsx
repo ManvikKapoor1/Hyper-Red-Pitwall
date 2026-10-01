@@ -4,6 +4,7 @@ import { calculateTirePerformance, getCompound } from '../../engine/model';
 import { tireOptions } from '../../engine/whatif';
 import { LineChart } from '../../components/charts/LineChart';
 import { Badge, Panel } from '../../components/ui';
+import { useLiveSim } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import type { TabProps } from './shared';
@@ -12,7 +13,10 @@ export function TiresTab({ race, car, res }: TabProps) {
   const u = useUnits();
   const setPlan = useStore((s) => s.setPlan);
   const { setup } = car;
-  const opts = useMemo(() => tireOptions(race.params, setup, car.plan, car.drivers), [race.params, setup, car.plan, car.drivers]);
+  const sim = useLiveSim(race, car);
+  const live = !!sim;
+  const opts = useMemo(() => tireOptions(race.params, setup, car.plan, car.drivers, sim), [race.params, setup, car.plan, car.drivers, sim]);
+  const first = res.stints[0]?.index;
   const maxAge = Math.max(...setup.compounds.map((c) => c.maxLife)) + 5;
   // each curve runs a few laps past its own max life; the axes are shared so compounds compare directly
   const curves = setup.compounds.map((c) => ({ c, points: Array.from({ length: Math.min(maxAge, c.maxLife + 5) + 1 }, (_, age) => ({ x: age, y: calculateTirePerformance(c, age) })) }));
@@ -91,7 +95,7 @@ export function TiresTab({ race, car, res }: TabProps) {
                   <td className="n">{r.totalLaps}</td>
                   <td className="n">{formatClock(r.finishSec)}</td>
                   <td className="n">{i === 0 ? '—' : `${formatDelta(r.totalPitLossSec - base.totalPitLossSec, 1)} s`}</td>
-                  <td className={`ellipsis ${crit.length ? 'c-red' : warn.length ? 'c-amber' : 'dim'}`} style={{ maxWidth: 260 }} title={[...crit, ...warn].map((c) => c.message).join('\n')}>
+                  <td className={`ellipsis ${crit.length ? 'c-red' : warn.length ? 'c-amber' : 'dim'}`} title={[...crit, ...warn].map((c) => c.message).join('\n')}>
                     {shown.length ? `${shown.length} ${crit.length ? 'critical' : `warning${shown.length > 1 ? 's' : ''}`} — ${shown[0].message}` : 'OK'}
                   </td>
                   <td className="right">
@@ -130,8 +134,8 @@ export function TiresTab({ race, car, res }: TabProps) {
                 <tr key={s.index}>
                   <td className="mono">S{s.index + 1}</td>
                   <td>{s.compound}</td>
-                  <td className={s.newTires || s.index === 0 ? '' : 'dim'}>{s.index === 0 ? (car.plan.startTireAge ? 'USED' : 'NEW') : s.newTires ? 'NEW' : 'CARRIED'}</td>
-                  <td className="n">{s.tireAgeStart}</td>
+                  <td className={s.newTires || s.index === first ? '' : 'dim'}>{s.index === first ? (live ? 'ON CAR' : car.plan.startTireAge ? 'USED' : 'NEW') : s.newTires ? 'NEW' : 'CARRIED'}</td>
+                  <td className="n">{live && s.index === first ? s.tireAgeEnd - s.laps : s.tireAgeStart}</td>
                   <td className="n">{s.tireAgeEnd}</td>
                   <td className="n">
                     {spec.targetLife} / {spec.maxLife}

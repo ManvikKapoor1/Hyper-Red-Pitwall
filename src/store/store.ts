@@ -3,9 +3,11 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { createCompletedSample, createDemoRace, createUpcomingSample } from '../data/samples';
 import { demoAdvanceLap } from '../engine/demo';
 import { DEFAULT_SETTINGS, makeDriver, newCar, newRace, nextVersion, versionOf } from '../engine/factory';
+import { fuelText } from '../engine/format';
 import { raceNowSec } from '../engine/live';
 import {
   applyQuickUpdate,
+  checkFlag,
   cloneLive,
   emptyLive,
   makeCall,
@@ -37,6 +39,9 @@ import type {
   StrategyPlan,
 } from '../engine/types';
 import { storageAdapter } from './persistence';
+
+// scenario types that exist in LMU (declared before the store: hydration migrates synchronously)
+const SCENARIO_TYPES = new Set<string>(['RAIN', 'DRYING', 'CUSTOM']);
 
 export interface SavedStrategy {
   id: string;
@@ -248,6 +253,8 @@ export const useStore = create<AppState>()(
         setActiveCar: (raceId, carId) => mapRace(raceId, (r) => ({ ...r, activeCarId: carId })),
         addCar: (raceId) =>
           mapRace(raceId, (r) => {
+            // a car added after the start would never take the green flag
+            if (r.status === 'LIVE' || r.status === 'FINISHED') return r;
             const src = r.cars.find((c) => c.id === r.activeCarId) ?? r.cars[0];
             const nums = r.cars.map((c) => Number(c.number)).filter((n) => isFinite(n));
             const car = newCar(r.params, get().settings, String((nums.length ? Math.max(...nums) : 0) + 1), src?.teamName ?? 'Team');
@@ -401,13 +408,14 @@ export const useStore = create<AppState>()(
             const now = nowFor(r);
             let clock = r.clock;
             if (input.raceTimeSec != null) clock = { ...clock, anchorRaceSec: input.raceTimeSec, anchorEpochMs: Date.now() };
-            const out = mapCar({ ...r, clock }, carId, (c) => ({ ...c, live: applyQuickUpdate(c, input, input.raceTimeSec ?? now, st) }));
+            const out = mapCar({ ...r, clock }, carId, (c) => ({ ...c, live: applyQuickUpdate(c, input, input.raceTimeSec ?? now, st, r.events) }));
             const lastEnd = out.cars.find((c) => c.id === carId)?.live.lastLapEndSec ?? 0;
             // keep the race clock from lagging behind recorded laps (e.g. paused clock)
             if (lastEnd > nowFor(out)) out.clock = { ...out.clock, anchorRaceSec: lastEnd, anchorEpochMs: Date.now() };
-            return out;
+            return settleFlag(out);
           });
-          get().toast('Race updated — projections recalculated', 'ok');
+          const done = get().races.find((x) => x.id === raceId)?.cars.find((c) => c.id === carId)?.live.phase === 'finished';
+          get().toast(done ? 'Chequered flag — race complete' : 'Race updated — projections recalculated', 'ok');
         },
         recordStop: (raceId, carId, input) => {
           const st = get().settings;
@@ -431,7 +439,7 @@ export const useStore = create<AppState>()(
                 ...live,
                 calls: [
                   ...live.calls,
-                  makeCall(live, live.lastLapEndSec, `PIT STOP ${live.stops.length} COMPLETE`, 'INFO', `+${input.fuelAddedL.toFixed(1)} L · ${input.changeTires ? 'tires ' + input.compound : 'no tires'} · ${drv}`, 'COMPLETED', 'event'),
+                  makeCall(live, live.lastLapEndSec, `PIT STOP ${live.stops.length} COMPLETE`, 'INFO', `+${fuelText(input.fuelAddedL, st.units.fuel)} · ${input.changeTires ? 'tires ' + input.compound : 'no tires'} · ${drv}`, 'COMPLETED', 'event'),
                   makeCall(live, live.lastLapEndSec, `STINT ${live.stintIndex + 1} STARTED`, 'INFO', `Driver ${drv}`, 'LOGGED', 'event'),
                 ],
               };
@@ -439,7 +447,7 @@ export const useStore = create<AppState>()(
               return { ...car, live };
             });
             if (lastEnd > now) out.clock = { ...out.clock, anchorRaceSec: lastEnd, anchorEpochMs: Date.now() };
-            return out;
+            return settleFlag(out);
           });
           get().toast('Pit stop recorded — new stint started', 'ok');
         },
@@ -473,7 +481,7 @@ export const useStore = create<AppState>()(
           mapRace(raceId, (r) => ({
             ...r,
             events: [...r.events, { ...ev, id }],
-            cars: r.cars.map((c) => ({ ...c, live: { ...c.live, calls: [...c.live.calls, makeCall(c.live, ev.startSec, `${ev.label.toUpperCase()}`, 'ACTION', `Est. ${Math.round(ev.durationSec / 60)} min · +${ev.lapDeltaSec}s/lap · pit ${ev.pitOpen ? 'OPEN' : 'CLOSED'}`, 'LOGGED', 'event')] } })),
+            cars: r.cars.map((c) => ({ ...c, live: { ...c.live, calls: [...c.live.calls, makeCall(c.live, ev.startSec, `${ev.label.toUpperCase()}`, 'ACTION', `Est. ${Math.round(ev.durationSec / 60)} min · ${ev.lapDeltaSec >= 0 ? '+' : ''}${ev.lapDeltaSec}s/lap · fuel −${ev.fuelReductionPct}%`, 'LOGGED', 'event')] } })),
           }));
           get().toast(`${ev.label} — strategy recalculated`, 'warn');
           return id;
@@ -541,12 +549,24 @@ export const useStore = create<AppState>()(
           const d = data as Partial<AppState>;
           if (!d || !Array.isArray(d.races) || !d.races.every(isRaceLike)) return false;
           const lib = (d.library ?? {}) as Partial<Library>;
-          const library: Library = {
-            strategies: Array.isArray(lib.strategies) ? lib.strategies : [],
-            tracks: Array.isArray(lib.tracks) ? lib.tracks : [],
-            teams: Array.isArray(lib.teams) ? lib.teams : [],
+          const incoming = d.races.map(normalizeRace);
+          // merge: races and library items from the file replace ones with the same id, the rest stay
+          const byId = <T extends { id: string }>(mine: T[], theirs: unknown): T[] => {
+            const add = Array.isArray(theirs) ? (theirs as T[]).filter((x) => x && typeof x.id === 'string') : [];
+            const ids = new Set(add.map((x) => x.id));
+            return [...mine.filter((x) => !ids.has(x.id)), ...add];
           };
-          set((s) => ({ races: d.races!, settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings, library, activeRaceId: d.races![0]?.id ?? null, seeded: true }));
+          set((s) => ({
+            races: byId(s.races, incoming),
+            settings: d.settings ? deepMerge(DEFAULT_SETTINGS, d.settings) : s.settings,
+            library: {
+              strategies: byId(s.library.strategies, lib.strategies),
+              tracks: byId(s.library.tracks, lib.tracks),
+              teams: [...new Set([...s.library.teams, ...(Array.isArray(lib.teams) ? lib.teams.filter((t) => typeof t === 'string') : [])])],
+            },
+            activeRaceId: incoming[0]?.id ?? s.activeRaceId,
+            seeded: true,
+          }));
           return true;
         },
         resetAll: () => {
@@ -557,7 +577,14 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'stint.v1',
-      version: 1,
+      // v2: safety car / FCY / VSC / slow zone / red flag removed (not in LMU)
+      version: 2,
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        const races = Array.isArray(p.races) ? p.races.filter(isRaceLike).map(normalizeRace) : [];
+        // sample races are rebuilt with the current scenarios on the next load
+        return version < 2 ? { ...p, races: races.filter((r) => !r.sample && !r.isDemo), seeded: false } : { ...p, races };
+      },
       storage: createJSONStorage(() => storageAdapter),
       partialize: (s) => ({ races: s.races, settings: s.settings, activeRaceId: s.activeRaceId, library: s.library, seeded: s.seeded }),
       merge: (persisted, current) => {
@@ -570,6 +597,16 @@ export const useStore = create<AppState>()(
     },
   ),
 );
+
+/** Ends each car's race at the flag; the race finishes when every car has. */
+function settleFlag(r: Race): Race {
+  const cars = r.cars.map((c) => ({ ...c, live: checkFlag(r.params, c.live) }));
+  // cars that never started (e.g. still on the grid) do not hold the race open
+  const started = cars.filter((c) => c.live.phase === 'racing' || c.live.phase === 'finished');
+  if (!started.length || !started.every((c) => c.live.phase === 'finished')) return { ...r, cars };
+  const end = Math.max(...cars.map((c) => c.live.lastLapEndSec));
+  return { ...r, cars, status: 'FINISHED', clock: { ...r.clock, running: false, anchorRaceSec: end, anchorEpochMs: Date.now() } };
+}
 
 function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
   let out = r;
@@ -585,6 +622,41 @@ function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
     out = mapCar(out, c0.id, () => c);
   }
   return out;
+}
+
+/** Fills lists that older exports may lack, so every page can rely on them. */
+/** An event from an older save: caution types LMU does not have become a custom incident. */
+function normalizeEvent(e: ScenarioEvent): ScenarioEvent {
+  const { id, label, startSec, durationSec, endedSec, lapDeltaSec, fuelReductionPct, energyReductionPct, planned } = e;
+  return { id, type: SCENARIO_TYPES.has(e.type) ? e.type : 'CUSTOM', label, startSec, durationSec, endedSec, lapDeltaSec, fuelReductionPct, energyReductionPct, planned };
+}
+
+/** Fills lists that older exports may lack and drops fields that no longer exist, so every page can rely on them. */
+function normalizeRace(r: Race): Race {
+  const params = { ...r.params } as Race['params'] & Record<string, unknown>;
+  delete params.safetyCarAssumption;
+  delete params.slowZoneAssumption;
+  return {
+    ...r,
+    params,
+    events: (r.events ?? []).map(normalizeEvent),
+    plannedEvents: Array.isArray(r.plannedEvents) ? r.plannedEvents.map(normalizeEvent) : [],
+    cars: r.cars.map((c) => ({
+      ...c,
+      versions: Array.isArray(c.versions) ? c.versions : [],
+      live: {
+        ...c.live,
+        laps: c.live.laps.map((l) => (l.event && !SCENARIO_TYPES.has(l.event) ? { ...l, event: 'CUSTOM' as const } : l)),
+        stops: (c.live.stops ?? []).map((st) => {
+          const { underEvent: _drop, ...rest } = st as typeof st & { underEvent?: string };
+          void _drop;
+          return rest;
+        }),
+        calls: c.live.calls ?? [],
+        inputs: c.live.inputs ?? [],
+      },
+    })),
+  };
 }
 
 /** Minimal structural check so a bad import cannot brick the app on reload. */

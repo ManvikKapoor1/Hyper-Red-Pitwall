@@ -217,7 +217,7 @@ function CallBoard({ race, car }: { race: Race; car: CarEntry }) {
                   <PriorityBadge p={c.priority} size="sm" />
                 </td>
                 <td className="call-cell">{c.text}</td>
-                <td className="ellipsis t2" style={{ maxWidth: 380 }} title={c.reason}>
+                <td className="ellipsis t2" title={c.reason}>
                   {c.reason}
                 </td>
                 <td className="dim upper" style={{ fontSize: 11 }}>

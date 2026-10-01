@@ -22,7 +22,6 @@ export interface StrategyOption {
   plan: StrategyPlan;
   assumptions: string[];
   current: boolean;
-  pitNow?: boolean;
   simOverrides?: Record<number, number>;
 }
 
@@ -112,35 +111,6 @@ export function generateAlternatives(ctx: AltContext): StrategyOption[] {
   if (sameCountPossible)
     opts.push(mk('triple', `${label(s)} + EXTEND TIRES`, 'Tires run three stints to cut stationary time', ['Tires beyond target life — check degradation inputs'], { stops: s, tireEvery: 3 }));
   return opts;
-}
-
-/** Variant that pits on the current lap (live: safety-car / slow-zone opportunity). */
-export function pitNowOption(ctx: AltContext & { currentLap: number; stintIndex: number }): StrategyOption {
-  const { car } = ctx;
-  const order = driverOrder(car.plan, car.drivers.map((d) => d.id));
-  const remainingStints = car.plan.stints.length - 1 - ctx.stintIndex;
-  const every = tireEveryOf(car.plan);
-  const overrides = { ...(ctx.sim?.pitLapOverrides ?? {}), [ctx.stintIndex]: ctx.currentLap };
-  const plan = buildPlan(ctx.race, car.setup, car.drivers, {
-    stops: Math.max(1, remainingStints),
-    tireEvery: every,
-    compound: car.plan.stints[ctx.stintIndex]?.stop.compound ?? car.plan.startCompound,
-    driverOrder: order,
-    base: car.plan,
-    keepFirst: ctx.stintIndex + 1,
-    name: 'Pit now',
-    sim: { ...ctx.sim, pitLapOverrides: overrides },
-  });
-  return {
-    id: 'pit-now',
-    name: `BOX LAP ${ctx.currentLap} — SAME STOP COUNT`,
-    description: 'Take the stop now, re-balance remaining stints',
-    plan,
-    assumptions: ['Event pit loss as entered', 'Remaining stints re-balanced'],
-    current: false,
-    pitNow: true,
-    simOverrides: overrides,
-  };
 }
 
 /** Runs and compares options, returning metrics + neutral tags. */

@@ -1,21 +1,28 @@
 import { useState } from 'react';
 import type { LiveProjection } from '../../engine/live';
-import { activeEventAt, calculatePitLoss } from '../../engine/model';
+import { splashAmounts } from '../../engine/calls';
+import { calculatePitLoss } from '../../engine/model';
 import type { CarEntry, Race } from '../../engine/types';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { Field, Modal, NumInput } from '../ui';
 
 /** Records a completed pit stop — the human confirms what actually happened. */
-export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { race: Race; car: CarEntry; p: LiveProjection; nowSec: number; prefill?: { fuelAfterL?: number }; onClose: () => void }) {
+export function PitStopRecorder({ race, car, p, prefill, onClose }: { race: Race; car: CarEntry; p: LiveProjection; prefill?: { fuelAfterL?: number }; onClose: () => void }) {
   const u = useUnits();
   const recordStop = useStore((s) => s.recordStop);
   const ns = p.nextStop;
   const { live, setup } = car;
   const nextDriver = ns?.toDriverId ?? live.driverId;
   const [inLap, setInLap] = useState(live.lapsCompleted + 1);
-  const [fuelAdded, setFuelAdded] = useState<number>(prefill?.fuelAfterL != null ? Math.max(0, prefill.fuelAfterL - live.fuelL) : (ns?.fuelAddedL ?? setup.fuelCapacityL - live.fuelL));
-  const [energyAfter, setEnergyAfter] = useState<number>(Math.min(setup.energyCapacityPct, live.energyPct + (ns?.energyAddedPct ?? setup.energyCapacityPct - live.energyPct)));
+  // fuel / energy when the car reaches the box: the in-lap still burns one lap unless it is already counted
+  const inLapPending = live.lapsCompleted + 1;
+  const entryFuel = Math.max(0, live.fuelL - p.fuelRate.value);
+  const entryEnergy = Math.max(0, live.energyPct - p.energyRate.value);
+  // planned stop, or — with no stop left in the plan — a splash sized to reach the flag
+  const planned = ns ? { fuelAddedL: ns.fuelAddedL, energyAddedPct: ns.energyAddedPct } : splashAmounts(car, p, inLapPending);
+  const [fuelAdded, setFuelAdded] = useState<number>(prefill?.fuelAfterL != null ? Math.max(0, prefill.fuelAfterL - entryFuel) : Math.min(planned.fuelAddedL, setup.fuelCapacityL - entryFuel));
+  const [energyAfter, setEnergyAfter] = useState<number>(Math.min(setup.energyCapacityPct, entryEnergy + planned.energyAddedPct));
   const [tires, setTires] = useState<boolean>(ns?.changeTires ?? false);
   const [compound, setCompound] = useState<string>(ns?.compound ?? live.compound);
   const [driver, setDriver] = useState<string>(nextDriver);
@@ -23,9 +30,11 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
   const [stationary, setStationary] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [note, setNote] = useState('');
-  const ev = activeEventAt(race.events, nowSec);
   const stat = stationary ?? est.stationarySec;
-  const tot = total ?? (ev?.pitLossUnderEventSec != null ? ev.pitLossUnderEventSec + stat : est.laneSec + stat);
+  const laneSec = est.laneSec;
+  const tot = total ?? laneSec + stat;
+  // the car cannot lose less time in the pits than it stood still
+  const badLoss = tot < stat;
 
   return (
     <Modal
@@ -39,6 +48,7 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
           </button>
           <button
             className="btn go"
+            disabled={badLoss}
             onClick={() => {
               recordStop(race.id, car.id, {
                 inLap,
@@ -52,7 +62,6 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
                 stationaryTimed: stationary != null,
                 totalTimed: total != null,
                 note,
-                underEvent: ev?.type,
               });
               onClose();
             }}
@@ -63,8 +72,16 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
       }
     >
       <div className="notice mb-8">
-        Plan for this stop: <b>{ns ? `+${u.fuel(ns.fuelAddedL)} ${u.fuelUnit} · ${ns.changeTires ? 'tires ' + ns.compound : 'no tires'} · ${ns.driverChange ? 'driver change' : 'same driver'}` : 'no stop planned'}</b>. Enter what actually happened.
-        {ev && <span className="c-amber"> Stop under {ev.label}.</span>}
+        {ns ? (
+          <>
+            Plan for this stop: <b>{`+${u.fuel(ns.fuelAddedL)} ${u.fuelUnit} · ${ns.changeTires ? 'tires ' + ns.compound : 'no tires'} · ${ns.driverChange ? 'driver change' : 'same driver'}`}</b>.
+          </>
+        ) : (
+          <>
+            No stop left in the plan — suggested splash to reach the flag: <b>+{u.fuelU(planned.fuelAddedL)}</b>.
+          </>
+        )}{' '}
+        Enter what actually happened.
       </div>
       <div className="grid-4">
         <Field label="In-lap" hint={inLap === live.lapsCompleted + 1 ? 'Completes current lap' : 'Already counted'}>
@@ -104,10 +121,11 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
         <Field label="Stationary (s)" hint={`Estimate ${u.n(est.stationarySec, 1)} s`}>
           <NumInput value={stat} decimals={1} min={0} onChange={setStationary} />
         </Field>
-        <Field label="Total pit loss (s)" hint={`Estimate ${u.n(est.laneSec + est.stationarySec, 1)} s`}>
+        <Field label="Total pit loss (s)" hint={`Estimate ${u.n(laneSec + stat, 1)} s`}>
           <NumInput value={tot} decimals={1} min={0} onChange={setTotal} />
         </Field>
       </div>
+      {badLoss && <div className="notice red mt-8">Total pit loss ({u.n(tot, 1)} s) is shorter than the stationary time ({u.n(stat, 1)} s).</div>}
       <Field label="Note" className="mt-8">
         <input className="input" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional — e.g. slow left-rear" />
       </Field>

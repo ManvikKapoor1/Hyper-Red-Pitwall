@@ -4,7 +4,7 @@ import { RaceContextBar, RaceNotFound } from '../../components/race/RaceContextB
 import { formatClock } from '../../engine/format';
 import type { CarEntry, Race } from '../../engine/types';
 import { Badge, Field, Modal, Stat } from '../../components/ui';
-import { activeCar, usePlanResult, useRaceFromRoute } from '../../lib/hooks';
+import { activeCar, isLive, usePlanResult, useRaceFromRoute } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { AlternativesTab } from './AlternativesTab';
@@ -73,6 +73,12 @@ function Strategy({ race, car }: { race: Race; car: CarEntry }) {
         )}
       </RaceContextBar>
       <div className="page full">
+        {isLive(car) && (
+          <div className="notice mb-8">
+            <b>Live race</b> — figures are projected from lap {car.live.lapsCompleted + 1} with the measured rates, current fuel, energy and tires
+            {car.live.stintIndex > 0 ? ` · stints 1–${car.live.stintIndex} are completed (see Analysis)` : ''}. Edits to later stints update the live projection.
+          </div>
+        )}
         <PlanSummary car={car} res={res} />
         <nav className="tabs" aria-label="Strategy sections">
           {TABS.map((t) => (
@@ -90,19 +96,20 @@ function Strategy({ race, car }: { race: Race; car: CarEntry }) {
 
 function PlanSummary({ car, res }: { car: CarEntry; res: TabProps['res'] }) {
   const u = useUnits();
+  const live = isLive(car);
   const crit = res.issues.filter((i) => i.severity === 'critical').length;
   const warn = res.issues.filter((i) => i.severity === 'warning').length;
   return (
     <div className="plan-summary">
-      <Stat k="Stops" v={res.stops.length} size="lg" />
-      <Stat k="Stints" v={res.stints.length} size="lg" />
-      <Stat k="Race laps" v={res.totalLaps} size="lg" />
+      <Stat k={live ? 'Stops left' : 'Stops'} v={res.stops.length} size="lg" />
+      <Stat k={live ? 'Stints left' : 'Stints'} v={res.stints.length} size="lg" h={live ? 'incl. current' : undefined} />
+      <Stat k="Race laps" v={res.totalLaps} size="lg" h={live ? 'projected' : undefined} />
       <Stat k="Finish" v={formatClock(res.finishSec)} size="lg" h="race time at flag" />
-      <Stat k="Pit loss" v={u.n(res.totalPitLossSec, 0)} u="s" size="lg" />
-      <Stat k="Fuel used" v={u.fuel(res.fuelUsedL, 0)} u={u.fuelUnit} size="lg" />
+      <Stat k={live ? 'Pit loss left' : 'Pit loss'} v={u.n(res.totalPitLossSec, 0)} u="s" size="lg" />
+      <Stat k={live ? 'Fuel to flag' : 'Fuel used'} v={u.fuel(res.fuelUsedL, 0)} u={u.fuelUnit} size="lg" />
       <Stat k="Min fuel margin" v={<span className={marginClass(res.minFuelMarginLaps)}>{u.n(res.minFuelMarginLaps, 1)}</span>} u="laps" size="lg" />
       {car.setup.energyEnabled && <Stat k="Min energy margin" v={<span className={marginClass(res.minEnergyMarginLaps)}>{u.n(res.minEnergyMarginLaps, 1)}</span>} u="laps" size="lg" />}
-      <Stat k="Tire sets" v={res.tireSets} size="lg" h={`max age ${res.maxTireAge} laps`} />
+      <Stat k="Tire sets" v={res.tireSets} size="lg" h={live ? `incl. current · max age ${res.maxTireAge}` : `max age ${res.maxTireAge} laps`} />
       <div className="stat">
         <span className="k">Plan check</span>
         <span className="row gap-4" style={{ marginTop: 4 }}>

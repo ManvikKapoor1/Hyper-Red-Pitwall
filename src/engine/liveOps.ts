@@ -2,11 +2,12 @@
  * Pure reducers for the live race state. The store calls these; they never
  * touch the UI and are easy to unit-test.
  */
-import { measureEnergyPerLap, measureFuelPerLap } from './live';
+import { measureEnergyPerLap, measureFuelPerLap, referenceLapMs } from './live';
+import { activeEventAt } from './model';
 import { uid } from './planner';
 import { calculateStrategy } from './simulate';
 import type { QuickUpdateInput } from './validate';
-import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, Settings } from './types';
+import type { ActualStop, CallLogEntry, CallPriority, CallStatus, CarEntry, CarLive, LapRecord, Race, RaceParams, ScenarioEvent, Settings } from './types';
 
 export function cloneLive(live: CarLive): CarLive {
   return {
@@ -43,7 +44,7 @@ export function emptyLive(car: Pick<CarEntry, 'setup' | 'plan' | 'drivers'>, set
     position: null,
     traffic: 'clear',
     weather: 'Dry',
-    driveMode: 'normal',
+    driveMode: s0?.mode ?? 'normal',
     fuelMethod: settings.defaults.fuelMethod,
     lastN: settings.defaults.lastN,
     userFuelPerLapL: null,
@@ -76,7 +77,30 @@ export function startRaceLive(live: CarLive): CarLive {
   return { ...cloneLive(live), phase: 'racing', lapsCompleted: 0, lastLapEndSec: 0, stintStartLap: 1 };
 }
 
-export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec: number, settings: Settings): CarLive {
+/**
+ * Chequered flag for this car: a timed race ends with the first lap completed
+ * after the clock runs out, a lap race when the car completes the last lap.
+ */
+export function flagFallen(params: RaceParams, live: CarLive): boolean {
+  if (live.phase !== 'racing' || live.lapsCompleted < 1) return false;
+  return params.lengthMode === 'laps' ? live.lapsCompleted >= params.laps : live.lastLapEndSec >= params.durationSec;
+}
+
+/** Ends the car's race when the flag has fallen (logs the chequered flag). */
+export function checkFlag(params: RaceParams, live: CarLive): CarLive {
+  if (!flagFallen(params, live)) return live;
+  const out = cloneLive(live);
+  out.phase = 'finished';
+  out.pitPhase = null;
+  out.calls.push(makeCall({ ...out, lapsCompleted: out.lapsCompleted - 1 }, out.lastLapEndSec, 'CHEQUERED FLAG', 'INFO', `Lap ${out.lapsCompleted} · ${params.lengthMode === 'laps' ? 'race distance completed' : 'first lap after the clock ran out'}`, 'LOGGED', 'event'));
+  return out;
+}
+
+/**
+ * Apply a manual update. `events` tags laps driven during a scenario (rain,
+ * incident) so they are left out of the green-flag consumption and pace averages.
+ */
+export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec: number, settings: Settings, events: ScenarioEvent[] = []): CarLive {
   const live = cloneLive(car.live);
   const prev = live.lapsCompleted;
   const next = input.lapsCompleted ?? prev;
@@ -94,24 +118,27 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     fields.push('lap');
     const fuelRate = measureFuelPerLap(car, settings).value;
     const energyRate = measureEnergyPerLap(car, settings).value;
-    const expectedMs = live.lastLapMs && live.lastLapMs < car.setup.racePaceMs * 1.5 ? live.lastLapMs : car.setup.racePaceMs;
+    const expectedMs = referenceLapMs(car) + (activeEventAt(events, live.lastLapEndSec)?.lapDeltaSec ?? 0) * 1000;
     const clockEnd = input.raceTimeSec ?? nowSec;
     let totalMs = (clockEnd - live.lastLapEndSec) * 1000;
     const timeKnown = totalMs > expectedMs * delta * 0.5;
     if (!timeKnown) totalMs = (input.lastLapMs ?? expectedMs) + expectedMs * (delta - 1);
     const endSec = timeKnown ? clockEnd : live.lastLapEndSec + totalMs / 1000;
-    const fuelKnown = input.fuelL != null && input.fuelL <= live.fuelL;
-    const fuelAfter = input.fuelL ?? Math.max(0, live.fuelL - fuelRate * delta);
-    const fuelUsedTotal = input.fuelUsedL ?? live.fuelL - fuelAfter;
+    // fuel: remaining as entered, or remaining = before − used, or an estimate from the measured rate
+    const fuelKnown = input.fuelL != null ? input.fuelL <= live.fuelL : input.fuelUsedL != null;
+    const fuelAfter = input.fuelL ?? (input.fuelUsedL != null ? Math.max(0, live.fuelL - input.fuelUsedL) : Math.max(0, live.fuelL - fuelRate * delta));
+    const fuelUsedTotal = live.fuelL - fuelAfter;
     const energyKnown = input.energyPct != null && input.energyPct <= live.energyPct;
     const energyAfter = input.energyPct ?? Math.max(0, live.energyPct - energyRate * delta);
     const energyUsedTotal = live.energyPct - energyAfter;
-    const tireStart = input.tireAge != null && input.tireAge < live.tireAge ? input.tireAge - delta : live.tireAge;
+    // an entered tire age is the age after the last of these laps
+    const tireStart = input.tireAge != null ? input.tireAge - delta : live.tireAge;
     const lastMs = input.lastLapMs;
     const otherMs = lastMs && delta > 1 ? (totalMs - lastMs) / (delta - 1) : totalMs / delta;
     let t = live.lastLapEndSec;
     for (let k = 1; k <= delta; k++) {
       const lapMs = k === delta && lastMs ? lastMs : otherMs;
+      const lapStart = t;
       t += lapMs / 1000;
       const rec: LapRecord = {
         lap: prev + k,
@@ -125,6 +152,8 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
         energyAfterPct: live.energyPct - (energyUsedTotal / delta) * k,
         tireAge: Math.max(0, tireStart) + k,
         compound: input.compound ?? live.compound,
+        mode: live.driveMode,
+        event: activeEventAt(events, lapStart)?.type,
         estimated: delta > 1 || !timeKnown,
       };
       live.laps.push(rec);
@@ -134,8 +163,13 @@ export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec:
     live.fuelL = fuelAfter;
     live.energyPct = energyAfter;
     live.tireAge = input.tireAge ?? live.tireAge + delta;
-    live.lastLapMs = lastMs ?? (timeKnown ? otherMs : live.lastLapMs);
-    if (live.lastLapMs && (!live.bestLapMs || live.lastLapMs < live.bestLapMs)) live.bestLapMs = live.lastLapMs;
+    // a lap time only counts when it is one real lap (not an average over several)
+    const single = lastMs ?? (timeKnown && delta === 1 ? otherMs : null);
+    if (single != null) {
+      live.lastLapMs = single;
+      const lastRec = live.laps[live.laps.length - 1];
+      if (!lastRec.event && (!live.bestLapMs || single < live.bestLapMs)) live.bestLapMs = single;
+    }
   }
 
   if (delta <= 0) {
@@ -187,7 +221,6 @@ export interface PitStopInput {
   stationarySec: number;
   totalLossSec: number;
   note?: string;
-  underEvent?: ActualStop['underEvent'];
   inLapMs?: number;
   stationaryTimed?: boolean;
   totalTimed?: boolean;
@@ -199,7 +232,7 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
   if (input.inLap === live.lapsCompleted + 1) {
     const fuelRate = measureFuelPerLap(car, settings).value;
     const energyRate = measureEnergyPerLap(car, settings).value;
-    const expected = (live.lastLapMs ?? car.setup.racePaceMs) + input.totalLossSec * 1000;
+    const expected = referenceLapMs(car) + input.totalLossSec * 1000;
     const measured = (nowSec - live.lastLapEndSec) * 1000;
     const lapMs = input.inLapMs ?? (measured > expected * 0.6 ? measured : expected);
     const endSec = live.lastLapEndSec + lapMs / 1000;
@@ -215,6 +248,7 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
       energyAfterPct: Math.max(0, live.energyPct - energyRate),
       tireAge: live.tireAge + 1,
       compound: live.compound,
+      mode: live.driveMode,
       pitIn: true,
       estimated: input.inLapMs == null,
     });
@@ -240,7 +274,6 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
     toDriverId: input.toDriverId,
     stationarySec: input.stationarySec,
     totalLossSec: input.totalLossSec,
-    underEvent: input.underEvent,
     note: input.note,
     stationaryTimed: input.stationaryTimed,
     totalTimed: input.totalTimed,
@@ -258,7 +291,8 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
   live.stintStartFuelL = live.fuelL;
   live.stintStartEnergyPct = live.energyPct;
   live.pitPhase = null;
-  live.driveMode = 'normal';
+  // the new stint starts in the mode the plan gives it
+  live.driveMode = car.plan.stints[live.stintIndex]?.mode ?? 'normal';
   live.lastUpdateLap = live.lapsCompleted;
   live = { ...live };
   return live;

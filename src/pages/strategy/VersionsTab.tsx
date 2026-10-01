@@ -44,7 +44,7 @@ export function VersionsTab({ race, car, res }: TabProps) {
                       v{v.version} {i === 0 && <Badge size="sm" color="blue">Latest</Badge>}
                     </td>
                     <td>{v.label}</td>
-                    <td className="ellipsis" style={{ maxWidth: 320 }} title={v.reason}>
+                    <td className="ellipsis" title={v.reason}>
                       {v.reason}
                     </td>
                     <td className="n">{v.lap != null && v.lap > 0 ? `L${v.lap}` : 'pre-race'}</td>
@@ -123,7 +123,7 @@ function VersionDiff({ v, tab, u }: { v: StrategyVersion; tab: TabProps; u: Retu
     ['energyPerLapPct', 'Energy per lap', (x) => `${u.n(x, 2)} %`],
     ['racePaceMs', 'Race pace', (x) => `${(x / 1000).toFixed(3)} s`],
     ['pitLaneLossSec', 'Pit-lane loss', (x) => `${u.n(x, 1)} s`],
-    ['refuelRateLps', 'Refuel rate', (x) => `${u.n(x, 2)} L/s`],
+    ['refuelRateLps', 'Refuel rate', (x) => `${u.n(u.fuelVal(x), 2)} ${u.fuelUnit}/s`],
     ['fuelCapacityL', 'Fuel capacity', (x) => u.fuelU(x)],
   ];
   for (const [k, label, f] of keys) {

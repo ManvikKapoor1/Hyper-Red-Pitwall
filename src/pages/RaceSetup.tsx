@@ -44,7 +44,12 @@ function RaceSetup({ race, car }: { race: Race; car: CarEntry }) {
             <Panel
               title="Cars"
               meta={
-                <button className="btn xs" onClick={() => addCar(race.id)} title="Add a car (copies the active car's setup and plan)">
+                <button
+                  className="btn xs"
+                  disabled={race.status === 'LIVE' || race.status === 'FINISHED'}
+                  onClick={() => addCar(race.id)}
+                  title={race.status === 'LIVE' || race.status === 'FINISHED' ? 'Cars can only be added before the start' : "Add a car (copies the active car's setup and plan)"}
+                >
                   <IconPlus size={12} /> Add car
                 </button>
               }
@@ -140,12 +145,6 @@ function RaceSection({ race }: { race: Race }) {
         <Field label="Rain probability (%)">
           <NumInput value={p.rainProbabilityPct} decimals={0} min={0} max={100} onChange={(v) => set({ rainProbabilityPct: v })} />
         </Field>
-        <Field label="Safety-car assumption" className="span-2">
-          <input className="input" value={p.safetyCarAssumption} onChange={(e) => set({ safetyCarAssumption: e.target.value })} />
-        </Field>
-        <Field label="Slow-zone assumption" className="span-2">
-          <input className="input" value={p.slowZoneAssumption} onChange={(e) => set({ slowZoneAssumption: e.target.value })} />
-        </Field>
       </div>
     </Panel>
   );
@@ -189,7 +188,7 @@ function CarSection({ race, car }: { race: Race; car: CarEntry }) {
           <input className="input" value={s.className} onChange={(e) => set({ className: e.target.value })} />
         </Field>
         <Field label={`Fuel capacity (${u.fuelUnit})`}>
-          <NumInput value={u.fuelVal(s.fuelCapacityL)} decimals={1} min={0} onChange={(v) => set({ fuelCapacityL: u.fuelFromDisplay(v) })} />
+          <NumInput value={u.fuelVal(s.fuelCapacityL)} decimals={1} min={1} onChange={(v) => set({ fuelCapacityL: u.fuelFromDisplay(v) })} />
         </Field>
         <Field label={`Fuel per lap (${u.fuelUnit})`} right={<span className="tag-assumption">ASSUMPTION</span>}>
           <NumInput value={u.fuelVal(s.fuelPerLapL)} decimals={3} step={0.01} min={0} onChange={(v) => set({ fuelPerLapL: u.fuelFromDisplay(v) })} />
@@ -257,7 +256,7 @@ function EnergySection({ race, car }: { race: Race; car: CarEntry }) {
       <fieldset className="plain-fs" disabled={!on}>
         <div className="grid-2">
           <Field label="Allocation (%)">
-            <NumInput value={s.energyCapacityPct} decimals={1} min={0} onChange={(v) => set({ energyCapacityPct: v })} />
+            <NumInput value={s.energyCapacityPct} decimals={1} min={1} onChange={(v) => set({ energyCapacityPct: v })} />
           </Field>
           <Field label="Use per lap (%)" right={<span className="tag-assumption">ASSUMPTION</span>}>
             <NumInput value={s.energyPerLapPct} decimals={2} step={0.05} min={0} onChange={(v) => set({ energyPerLapPct: v })} />
@@ -307,8 +306,8 @@ function MarginsSection({ race, car }: { race: Race; car: CarEntry }) {
           {DRIVE_MODES.map((m) => (
             <tr key={m.value}>
               <td>{m.label}</td>
-              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].fuelPct} decimals={1} onChange={(v) => mode(m.value, { fuelPct: v })} />}</td>
-              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].energyPct} decimals={1} onChange={(v) => mode(m.value, { energyPct: v })} />}</td>
+              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].fuelPct} decimals={1} min={-90} max={200} onChange={(v) => mode(m.value, { fuelPct: v })} />}</td>
+              <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].energyPct} decimals={1} min={-90} max={200} onChange={(v) => mode(m.value, { energyPct: v })} />}</td>
               <td className="n">{m.value === 'normal' ? '0' : <NumInput size="sm" value={s.modes[m.value].lapSec} decimals={2} step={0.05} onChange={(v) => mode(m.value, { lapSec: v })} />}</td>
             </tr>
           ))}
@@ -325,7 +324,7 @@ function TiresSection({ race, car }: { race: Race; car: CarEntry }) {
   const cs = car.setup.compounds;
   const inUse = (name: string) => planUsesCompound(car.plan, name) || car.live.compound === name;
   const upd = (i: number, patch: Partial<CompoundSpec>) => set({ compounds: cs.map((c, k) => (k === i ? { ...c, ...patch } : c)) });
-  const num = (i: number, k: keyof CompoundSpec, d: number, step = 1): ReactNode => <NumInput size="sm" value={cs[i][k] as number} decimals={d} step={step} onChange={(v) => upd(i, { [k]: v })} />;
+  const num = (i: number, k: keyof CompoundSpec, d: number, step = 1, min?: number): ReactNode => <NumInput size="sm" value={cs[i][k] as number} decimals={d} step={step} min={min} onChange={(v) => upd(i, { [k]: v })} />;
   return (
     <Panel
       title="Tire compounds"
@@ -356,10 +355,10 @@ function TiresSection({ race, car }: { race: Race; car: CarEntry }) {
                 <CompoundName name={c.name} taken={cs.map((x) => x.name)} onRename={(to) => renameCompound(race.id, car.id, c.name, to)} />
               </td>
               <td className="n">{num(i, 'paceOffsetSec', 2, 0.05)}</td>
-              <td className="n">{num(i, 'degSecPerLap', 3, 0.005)}</td>
-              <td className="n">{num(i, 'targetLife', 0)}</td>
-              <td className="n">{num(i, 'maxLife', 0)}</td>
-              <td className="n">{num(i, 'cliffSecPerLap', 3, 0.01)}</td>
+              <td className="n">{num(i, 'degSecPerLap', 3, 0.005, 0)}</td>
+              <td className="n">{num(i, 'targetLife', 0, 1, 1)}</td>
+              <td className="n">{num(i, 'maxLife', 0, 1, 1)}</td>
+              <td className="n">{num(i, 'cliffSecPerLap', 3, 0.01, 0)}</td>
               <td className="right">
                 <button className="btn xs ghost icon" disabled={cs.length <= 1 || inUse(c.name)} title={inUse(c.name) ? 'Used by the plan or fitted to the car — change those first' : 'Remove compound'} onClick={() => set({ compounds: cs.filter((_, k) => k !== i) })}>
                   <IconTrash size={12} />

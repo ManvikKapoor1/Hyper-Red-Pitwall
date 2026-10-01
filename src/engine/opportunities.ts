@@ -8,8 +8,9 @@
  * still decides.
  */
 import { minConfidence } from './calls';
-import { compareStrategies, generateAlternatives, pitNowOption, type StrategyMetrics, type StrategyOption } from './alternatives';
+import { compareStrategies, generateAlternatives, type StrategyMetrics, type StrategyOption } from './alternatives';
 import { liveSimOptions, measureEnergyPerLap, measureFuelPerLap } from './live';
+import { fuelRateText } from './format';
 import { getCompound } from './model';
 import type { SimOptions, StrategyResult } from './simulate';
 import type { CarEntry, Confidence, Race, Settings } from './types';
@@ -93,12 +94,6 @@ export function findOpportunities(race: Race, car: CarEntry, settings: Settings)
   const sim: SimOptions | undefined = racing ? liveSimOptions(race, car, settings) : { events: race.plannedEvents, earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps };
   const keepFirst = racing ? Math.min(live.stintIndex + 1, car.plan.stints.length) : 0;
   const options = generateAlternatives({ race: race.params, car, sim, keepFirst });
-  const event = racing ? race.events.find((e) => e.pitOpen && e.startSec <= live.lastLapEndSec && live.lastLapEndSec <= (e.endedSec ?? e.startSec + e.durationSec)) : undefined;
-  const finalStint = live.stintIndex >= car.plan.stints.length - 1;
-  if (event && !finalStint) {
-    const pn = pitNowOption({ race: race.params, car, sim, currentLap: live.lapsCompleted + 1, stintIndex: live.stintIndex });
-    options.push({ ...pn, name: `BOX NOW UNDER ${event.type.replace('_', ' ')}`, description: 'Take the stop while the field is slowed' });
-  }
   const metrics = compareStrategies(race.params, car, options, sim);
   const base = metrics.find((m) => m.option.current) ?? metrics[0];
 
@@ -132,7 +127,7 @@ export function findOpportunities(race: Race, car: CarEntry, settings: Settings)
     .sort((a, b) => Number(b.better) - Number(a.better) || b.gainLaps - a.gainLaps || b.gainSec - a.gainSec);
 
   const basis = racing
-    ? `From lap ${live.lapsCompleted + 1} · fuel ${fuelRate.value.toFixed(2)} L/lap (${fuelRate.source})${car.setup.energyEnabled ? ` · energy ${energyRate.value.toFixed(2)} %/lap` : ''}`
+    ? `From lap ${live.lapsCompleted + 1} · fuel ${fuelRateText(fuelRate.value, settings.units.fuel)} (${fuelRate.source})${car.setup.energyEnabled ? ` · energy ${energyRate.value.toFixed(2)} %/lap` : ''}`
     : 'Pre-race · entered assumptions and planned scenarios';
   return { base, list, checked: options.length - 1, basis };
 }

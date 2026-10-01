@@ -17,7 +17,10 @@ import { calculateRequiredStops, calculateStintLength, type SimStint, type SimSt
 import type { DriveMode, PitTemplate, StrategyPlan } from '../../engine/types';
 import { IconDown, IconUp, IconCopy, IconPlus, IconTrash } from '../../components/icons';
 import { Field, LapTimeInput, NumInput, Panel, Seg } from '../../components/ui';
+import { isLive } from '../../lib/hooks';
 import { useUnits } from '../../lib/units';
+import { actualStints } from '../../engine/analysis';
+import { liveSimOptions } from '../../engine/live';
 import { useStore } from '../../store/store';
 import { DriverChip } from '../../components/race/DriverChip';
 import { marginClass } from '../../lib/margins';
@@ -55,6 +58,10 @@ function PlanFlow({ tab, sel, onSel, edit }: { tab: TabProps; sel: number; onSel
   const plan = car.plan;
   const byIndex = new Map(res.stints.map((s) => [s.index, s]));
   const stopAfter = new Map(res.stops.map((s) => [s.afterStint, s]));
+  // live: stints before the current one are history — shown as driven, not editable in structure
+  const cur = isLive(car) ? car.live.stintIndex : -1;
+  const done = new Map(cur > 0 ? actualStints(car).filter((a) => a.index < cur).map((a) => [a.index, a]) : []);
+  const doneStop = new Map(cur > 0 ? car.live.stops.map((x) => [x.index, x]) : []);
   const act = (e: React.MouseEvent, fn: () => void) => {
     e.stopPropagation();
     fn();
@@ -73,11 +80,14 @@ function PlanFlow({ tab, sel, onSel, edit }: { tab: TabProps; sel: number; onSel
       </li>
       {plan.stints.map((st, i) => {
         const s = byIndex.get(i);
+        const a = done.get(i);
         const stop = stopAfter.get(i);
-        const unused = !s;
+        const ds = doneStop.get(i);
+        const locked = i <= cur; // completed or being driven: order and existence are fixed
+        const unused = !s && !a;
         return (
           <li key={st.id} className="flow-group">
-            <div className={`flow-node flow-stint ${sel === i ? 'sel' : ''} ${unused ? 'unused' : ''}`} onClick={() => onSel(i)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSel(i)}>
+            <div className={`flow-node flow-stint ${sel === i ? 'sel' : ''} ${unused ? 'unused' : ''} ${a ? 'done' : ''}`} onClick={() => onSel(i)} role="button" tabIndex={0} onKeyDown={(e) => e.key === 'Enter' && onSel(i)}>
               <span className="flow-bar" style={{ background: car.drivers.find((d) => d.id === st.driverId)?.color }} />
               <div className="grow" style={{ minWidth: 0 }}>
                 <div className="row between">
@@ -85,11 +95,12 @@ function PlanFlow({ tab, sel, onSel, edit }: { tab: TabProps; sel: number; onSel
                     <b className="mono">S{i + 1}</b>
                     <DriverChip car={car} id={st.driverId} name />
                   </span>
-                  <span className="mono">{s ? `L${s.startLap}–${s.endLap}` : 'not reached'}</span>
+                  <span className="mono">{s ? `L${s.startLap}–${s.endLap}` : a ? `L${a.startLap}–${a.endLap}` : 'not reached'}</span>
                 </div>
                 <div className="row between sublabel">
                   <span>
-                    {s ? `${s.laps} laps` : `${st.targetLaps} planned`} · {s?.compound ?? '—'} · {MODE_LABEL[st.mode]}
+                    {a && !s ? `${a.laps} laps · ${a.compound} · driven` : `${s ? `${s.laps} laps` : `${st.targetLaps} planned`} · ${s?.compound ?? '—'} · ${MODE_LABEL[st.mode]}`}
+                    {i === cur && ' · NOW'}
                   </span>
                   {s && (
                     <span>
@@ -101,24 +112,41 @@ function PlanFlow({ tab, sel, onSel, edit }: { tab: TabProps; sel: number; onSel
                 </div>
               </div>
               <div className="flow-act">
-                <button className="btn xs ghost icon" title="Move up" disabled={i === 0} onClick={(e) => act(e, () => (edit(moveStint(plan, i, i - 1)), onSel(i - 1)))}>
+                <button className="btn xs ghost icon" title="Move up" disabled={i === 0 || i <= cur + 1} onClick={(e) => act(e, () => (edit(moveStint(plan, i, i - 1)), onSel(i - 1)))}>
                   <IconUp size={12} />
                 </button>
-                <button className="btn xs ghost icon" title="Move down" disabled={i === plan.stints.length - 1} onClick={(e) => act(e, () => (edit(moveStint(plan, i, i + 1)), onSel(i + 1)))}>
+                <button className="btn xs ghost icon" title="Move down" disabled={i === plan.stints.length - 1 || locked} onClick={(e) => act(e, () => (edit(moveStint(plan, i, i + 1)), onSel(i + 1)))}>
                   <IconDown size={12} />
                 </button>
-                <button className="btn xs ghost icon" title="Duplicate stint" onClick={(e) => act(e, () => edit(duplicateStint(plan, i)))}>
+                <button className="btn xs ghost icon" title="Duplicate stint" disabled={i < cur} onClick={(e) => act(e, () => edit(duplicateStint(plan, i)))}>
                   <IconCopy size={12} />
                 </button>
-                <button className="btn xs ghost icon" title="Add stint after" onClick={(e) => act(e, () => (edit(addStint(plan, i)), onSel(i + 1)))}>
+                <button className="btn xs ghost icon" title="Add stint after" disabled={i < cur} onClick={(e) => act(e, () => (edit(addStint(plan, i)), onSel(i + 1)))}>
                   <IconPlus size={12} />
                 </button>
-                <button className="btn xs ghost icon" title="Delete stint" disabled={plan.stints.length <= 1} onClick={(e) => act(e, () => (edit(deleteStint(plan, i)), onSel(Math.max(0, i - 1))))}>
+                <button className="btn xs ghost icon" title="Delete stint" disabled={plan.stints.length <= 1 || locked} onClick={(e) => act(e, () => (edit(deleteStint(plan, i)), onSel(Math.max(0, i - 1))))}>
                   <IconTrash size={12} />
                 </button>
               </div>
             </div>
             {stop && <PitNode stop={stop} />}
+            {!stop && ds && (
+              <div className="flow-node flow-pit">
+                <span className="flow-pin" />
+                <div className="grow" style={{ minWidth: 0 }}>
+                  <div className="row between">
+                    <span className="flow-t">
+                      PIT {ds.index + 1} · L{ds.lap}
+                    </span>
+                    <span className="mono">{u.n(ds.totalLossSec, 1)} s</span>
+                  </div>
+                  <div className="sublabel">
+                    done · +{u.fuelU(ds.fuelAddedL)}
+                    {ds.changeTires ? ` · ${ds.compound}` : ''} · {u.n(ds.stationarySec, 1)} s stationary
+                  </div>
+                </div>
+              </div>
+            )}
           </li>
         );
       })}
@@ -167,10 +195,23 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
   const isLast = index === plan.stints.length - 1;
   const set = (patch: Parameters<typeof updateStint>[2]) => edit(updateStint(plan, index, patch));
   const setStop = (patch: Parameters<typeof updateStop>[2]) => edit(updateStop(plan, index, patch));
+  // a stint already driven is history: shown, not editable
+  const completed = isLive(car) && index < car.live.stintIndex;
   if (!st) return null;
   return (
-    <>
-      <Panel title={`Stint ${index + 1}`} meta={s ? <span className="sublabel">{s.final ? 'final stint — runs to the flag' : `limited by ${s.limiter}`}</span> : <span className="sublabel c-amber">not reached by the race distance</span>}>
+    <fieldset className="bare col gap-8" disabled={completed} title={completed ? 'Driven stint — history, not editable' : undefined}>
+      <Panel
+        title={`Stint ${index + 1}`}
+        meta={
+          s ? (
+            <span className="sublabel">{s.final ? 'final stint — runs to the flag' : `limited by ${s.limiter}`}</span>
+          ) : completed ? (
+            <span className="sublabel">completed — see Analysis</span>
+          ) : (
+            <span className="sublabel c-amber">not reached by the race distance</span>
+          )
+        }
+      >
         <div className="grid-3">
           <Field label="Driver">
             <select className="select" value={st.driverId} onChange={(e) => set({ driverId: e.target.value })}>
@@ -182,7 +223,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
             </select>
           </Field>
           <Field label="Target laps" hint={isLast ? 'Final stint runs to the flag' : undefined}>
-            <NumInput value={st.targetLaps} decimals={0} min={1} disabled={isLast} onChange={(v) => set({ targetLaps: Math.round(v) })} />
+            <NumInput value={isLast && s ? s.laps : st.targetLaps} decimals={0} min={1} disabled={isLast} onChange={(v) => set({ targetLaps: Math.round(v) })} />
           </Field>
           <Field label="Drive mode" hint="Effects are the user-defined values in Race Setup">
             <select className="select" value={st.mode} onChange={(e) => set({ mode: e.target.value as DriveMode })}>
@@ -197,7 +238,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
             <LapTimeInput value={st.lapTimeOverrideMs} onChange={(ms) => set({ lapTimeOverrideMs: ms })} onClear={() => set({ lapTimeOverrideMs: undefined })} />
           </Field>
           <Field group label={`Fuel/lap override (${u.fuelUnit})`} right={st.fuelPerLapOverrideL != null && <button className="btn xs ghost" onClick={() => set({ fuelPerLapOverrideL: undefined })}>clear</button>} hint="Blank = car value × driver factor">
-            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapOverrideL: undefined })} />
+            <NumInput value={st.fuelPerLapOverrideL == null ? null : u.fuelVal(st.fuelPerLapOverrideL)} decimals={3} step={0.01} min={0.01} placeholder="—" onChange={(v) => set({ fuelPerLapOverrideL: u.fuelFromDisplay(v) })} onClear={() => set({ fuelPerLapOverrideL: undefined })} />
           </Field>
           {car.setup.energyEnabled ? (
             <Field group label="Energy budget (%)" right={st.energyTargetPct != null && <button className="btn xs ghost" onClick={() => set({ energyTargetPct: undefined })}>clear</button>} hint="Optional stint energy budget">
@@ -271,7 +312,7 @@ function StintEditor({ tab, index, edit }: { tab: TabProps; index: number; edit:
       )}
 
       {s && <StintResult s={s} tab={tab} />}
-    </>
+    </fieldset>
   );
 }
 
@@ -301,7 +342,7 @@ function StintResult({ s, tab }: { s: SimStint; tab: TabProps }) {
           <span className="v">
             {u.fuelU(s.fuelUsedL)} · {u.fpl(s.fuelPerLapL)}/lap
           </span>
-          <span className="k">At stop</span>
+          <span className="k">{s.final ? 'At flag' : 'At stop'}</span>
           <span className="v">{u.fuelU(s.fuelEndL)}</span>
           <span className="k">Margin</span>
           <span className={`v ${marginClass(s.fuelMarginLaps)}`}>{u.n(s.fuelMarginLaps, 2)} laps</span>
@@ -314,7 +355,7 @@ function StintResult({ s, tab }: { s: SimStint; tab: TabProps }) {
             <span className="v">
               {u.pct(s.energyUsedPct)} % · {u.n(s.energyPerLapPct, 2)}/lap
             </span>
-            <span className="k">At stop</span>
+            <span className="k">{s.final ? 'At flag' : 'At stop'}</span>
             <span className="v">{u.pct(s.energyEndPct)} %</span>
             <span className="k">Margin</span>
             <span className={`v ${marginClass(s.energyMarginLaps)}`}>{u.n(s.energyMarginLaps, 2)} laps</span>
@@ -346,9 +387,11 @@ function PlanSettings({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) =>
   const u = useUnits();
   const plan = car.plan;
   const set = (patch: Partial<StrategyPlan>) => edit({ ...plan, ...patch });
+  // start fuel, compound and energy only shape the race from lap 1
+  const started = car.live.phase === 'racing' || car.live.phase === 'finished';
   return (
-    <Panel title="Race start">
-      <div className="grid-2">
+    <Panel title="Race start" meta={started ? <span className="sublabel">fixed once the race has started</span> : undefined}>
+      <fieldset className="bare grid-2" disabled={started}>
         <Field label="Plan name" className="span-2">
           <input className="input" value={plan.name} onChange={(e) => set({ name: e.target.value })} />
         </Field>
@@ -372,15 +415,21 @@ function PlanSettings({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) =>
             <NumInput value={plan.startEnergyPct} decimals={1} min={0} max={100} onChange={(v) => set({ startEnergyPct: v })} />
           </Field>
         )}
-      </div>
+      </fieldset>
     </Panel>
   );
 }
 
 function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => void }) {
   const { race, car, res } = tab;
-  const full = calculateStintLength(car.setup, undefined, undefined, car.plan.startCompound);
-  const minStops = calculateRequiredStops(res.totalLaps, full.overall);
+  const settings = useStore((s) => s.settings);
+  // live: keep the stints driven so far and the current one; build the rest from the live state
+  const live = isLive(car);
+  const keepFirst = live ? Math.min(car.live.stintIndex + 1, car.plan.stints.length) : 0;
+  const sim = live ? liveSimOptions(race, car, settings) : undefined;
+  const full = calculateStintLength(car.setup, sim?.fuelPerLapL, sim?.energyPerLapPct, car.plan.startCompound);
+  const lapsToBuild = live ? Math.max(0, res.totalLaps - (res.stints[0]?.endLap ?? car.live.lapsCompleted)) : res.totalLaps;
+  const minStops = live ? (lapsToBuild > 0 ? 1 + calculateRequiredStops(lapsToBuild, full.overall) : 0) : calculateRequiredStops(res.totalLaps, full.overall);
   const [stops, setStops] = useState(Math.max(minStops, res.stops.length));
   const [tireEvery, setTireEvery] = useState(2);
   const [block, setBlock] = useState(1);
@@ -391,12 +440,21 @@ function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => vo
   const ordered = [...order.filter((id) => car.drivers.some((d) => d.id === id)), ...car.drivers.filter((d) => !order.includes(d.id)).map((d) => d.id)];
   const limiter = full.overall === full.fuel ? 'fuel' : full.overall === full.energy ? 'energy' : full.overall === full.tire ? 'tires' : 'driver';
   return (
-    <Panel title="Auto-build" meta={<span className="sublabel">replaces all stints</span>}>
+    <Panel title="Auto-build" meta={<span className="sublabel">{live ? 'replaces the stints after the current one' : 'replaces all stints'}</span>}>
       <div className="notice mb-8">
-        Longest safe stint on a full tank: <b className="mono">{full.overall}</b> laps (limited by {limiter}). Minimum for {res.totalLaps} laps: <b className="mono">{minStops}</b> stops.
+        Longest safe stint on a full tank: <b className="mono">{full.overall}</b> laps (limited by {limiter}{live ? ', measured rates' : ''}).{' '}
+        {live ? (
+          <>
+            After the current stint: {lapsToBuild} laps — at least <b className="mono">{minStops}</b> more stop{minStops === 1 ? '' : 's'}.
+          </>
+        ) : (
+          <>
+            Minimum for {res.totalLaps} laps: <b className="mono">{minStops}</b> stops.
+          </>
+        )}
       </div>
       <div className="grid-2">
-        <Field label="Stops">
+        <Field label={live ? 'Stops left' : 'Stops'}>
           <NumInput value={stops} decimals={0} min={0} onChange={(v) => setStops(Math.round(v))} />
         </Field>
         <Field group label="Stint laps">
@@ -435,13 +493,13 @@ function AutoBuild({ tab, edit }: { tab: TabProps; edit: (p: StrategyPlan) => vo
         <button
           className="btn primary grow"
           onClick={() => {
-            if (!confirm('Replace all stints with an auto-built plan?')) return;
-            edit(buildPlan(race.params, car.setup, car.drivers, { stops, tireEvery, driverOrder: ordered, driverBlock: block, mode, distribution: dist, compound: car.plan.startCompound, name: car.plan.name, base: car.plan }));
+            if (!confirm(live ? 'Replace the stints after the current one with an auto-built plan?' : 'Replace all stints with an auto-built plan?')) return;
+            edit(buildPlan(race.params, car.setup, car.drivers, { stops, tireEvery, driverOrder: ordered, driverBlock: block, mode, distribution: dist, compound: live ? car.live.compound : car.plan.startCompound, name: car.plan.name, base: car.plan, keepFirst, sim }));
           }}
         >
           Build plan
         </button>
-        <button className="btn" onClick={() => edit(autoBalance(race.params, car.setup, car.drivers, car.plan, 0, { distribution: dist }))} title="Keep stints, drivers and stops; re-distribute laps">
+        <button className="btn" onClick={() => edit(autoBalance(race.params, car.setup, car.drivers, car.plan, keepFirst, { distribution: dist, sim }))} title={live ? 'Keep stints, drivers and stops; re-distribute the laps after the current stint' : 'Keep stints, drivers and stops; re-distribute laps'}>
           Re-balance laps
         </button>
       </div>

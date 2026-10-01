@@ -24,7 +24,7 @@ export function CurrentStintCard({ race, car, p }: { race: Race; car: CarEntry; 
   const cur = p.current;
   const target = p.window.target;
   const stintLen = cur ? cur.endLap - live.stintStartLap + 1 : 0;
-  const done = Math.max(0, p.currentLap - live.stintStartLap);
+  const done = Math.max(0, live.lapsCompleted - live.stintStartLap + 1);
   const d = driverOf(car, live.driverId);
   const spec = getCompound(setup, live.compound);
   const fuelLow = p.fuelAtPitLaps < 1;
@@ -100,7 +100,7 @@ export function RaceStatePanel({ race, car, p, onRecordStop }: { race: Race; car
   const startRace = useStore((s) => s.startRace);
   const finishRace = useStore((s) => s.finishRace);
   const { live } = car;
-  const stateColor = p.state === 'SAFETY CAR' || p.state === 'SLOW ZONE' ? 'amber' : p.state.startsWith('PIT') ? 'blue' : p.state === 'FINISH' ? '' : p.state === 'STRATEGY CHANGE' ? 'blue' : 'green';
+  const stateColor = p.state === 'WEATHER' || p.state === 'INCIDENT' ? 'amber' : p.state.startsWith('PIT') ? 'blue' : p.state === 'FINISH' ? '' : p.state === 'STRATEGY CHANGE' ? 'blue' : 'green';
   return (
     <Panel title="Race state" meta={<span className={`rs-now c-${stateColor}`}>{p.state}</span>}>
       <div className="rs-chips">
@@ -189,8 +189,12 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
   const u = useUnits();
   const setFuelMethod = useStore((s) => s.setFuelMethod);
   const { live, setup } = car;
-  const margin = p.isFinalStint ? (p.current?.fuelMarginLaps ?? 0) : p.fuelAtPitLaps;
-  const mColor = margin < 1 ? 'red' : margin < 2 ? 'amber' : 'green';
+  const finished = live.phase === 'finished';
+  // after the flag: what was actually left in the tank
+  const margin = finished ? p.fuelAtPitLaps : p.isFinalStint ? (p.current?.fuelMarginLaps ?? 0) : p.fuelAtPitLaps;
+  // colour follows the value as shown (one decimal)
+  const shown = Math.round(margin * 10) / 10;
+  const mColor = shown < 1 ? 'red' : shown < 2 ? 'amber' : 'green';
   return (
     <Panel
       title={<span className="label"><IconFuel size={11} /> Fuel</span>}
@@ -207,7 +211,7 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
         {live.fuelMethod === 'user' ? (
           <div className="stat right" style={{ width: 96 }}>
             <span className="k">Per lap (user)</span>
-            <NumInput size="sm" value={u.fuelVal(live.userFuelPerLapL ?? p.fuelRate.value)} decimals={u.fuelUnit === 'gal' ? 3 : 2} step={0.01} unit={u.fuelUnit} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, u.fuelFromDisplay(v))} />
+            <NumInput size="sm" value={u.fuelVal(live.userFuelPerLapL ?? p.fuelRate.value)} decimals={u.fuelUnit === 'gal' ? 3 : 2} step={0.01} min={0.01} unit={u.fuelUnit} onChange={(v) => setFuelMethod(race.id, car.id, 'user', undefined, u.fuelFromDisplay(v))} />
           </div>
         ) : (
           <Stat k="Per lap" v={u.fpl(p.fuelRate.value)} u={`${u.fuelUnit}/lap`} className="right" h={p.fuelRate.measured ? <span className="tag-measured">MEASURED</span> : <span className="tag-assumption">ESTIMATE</span>} />
@@ -220,9 +224,9 @@ export function FuelCard({ race, car, p }: { race: Race; car: CarEntry; p: LiveP
         <span className="v">{u.n(p.fuelRange.safe, 2)} laps</span>
         <span className="k">{p.isFinalStint ? 'Target' : 'Target pit'}</span>
         <span className="v">{p.isFinalStint ? 'FLAG' : `LAP ${p.window.target}`}</span>
-        <span className="k">{p.isFinalStint ? 'Margin at flag' : 'At pit'}</span>
+        <span className="k">{finished ? 'Left at flag' : p.isFinalStint ? 'Margin at flag' : 'At pit'}</span>
         <span className={`v c-${mColor}`}>
-          {p.isFinalStint ? '' : `${u.fuel(p.fuelAtPitL)} ${u.fuelUnit} · `}
+          {p.isFinalStint && !finished ? '' : `${u.fuel(p.fuelAtPitL)} ${u.fuelUnit} · `}
           {formatDelta(margin, 1)} laps
         </span>
         <span className="k">Fuel save req.</span>
@@ -283,10 +287,11 @@ export function EnergyCard({ car, p }: { car: CarEntry; p: LiveProjection }) {
         <div className="empty">Virtual energy tracking disabled in setup.</div>
       </Panel>
     );
-  const delta = p.energyTargetPct != null ? live.energyPct - p.energyTargetPct : 0;
-  const status = delta < -1 ? 'BELOW TARGET' : delta > 2 ? 'ABOVE TARGET' : 'ON TARGET';
-  const sColor = delta < -1 ? 'amber' : 'green';
-  const atFinish = p.sim.laps[p.sim.laps.length - 1]?.energyAfterPct;
+  const finished = live.phase === 'finished';
+  const delta = p.energyTargetPct != null ? live.energyPct - p.energyTargetPct : null;
+  const status = finished ? 'FINISHED' : delta == null ? '—' : delta < -1 ? 'BELOW TARGET' : delta > 2 ? 'ABOVE TARGET' : 'ON TARGET';
+  const sColor = delta != null && delta < -1 ? 'amber' : finished || delta == null ? '' : 'green';
+  const atFinish = finished ? live.energyPct : p.sim.laps[p.sim.laps.length - 1]?.energyAfterPct;
   return (
     <Panel title={<span className="label c-violet">Virtual energy</span>} meta={<ConfidenceBadge c={p.energyRate.confidence} basis={p.energyRate.source} />} className="kpi">
       <div className="row between">
@@ -296,7 +301,7 @@ export function EnergyCard({ car, p }: { car: CarEntry; p: LiveProjection }) {
       <Bar pct={live.energyPct} color="violet" marks={p.energyTargetPct != null ? [p.energyTargetPct] : []} />
       <div className="kv mt-8">
         <span className="k">Delta</span>
-        <span className={`v c-${sColor}`}>{formatDelta(delta, 1)} %</span>
+        <span className={`v ${sColor ? `c-${sColor}` : ''}`}>{delta == null ? '—' : `${formatDelta(delta, 1)} %`}</span>
         <span className="k">Per lap</span>
         <span className="v">{u.n(p.energyRate.value, 2)} %</span>
         <span className="k">{p.isFinalStint ? 'At flag' : 'Projected at pit'}</span>
@@ -304,7 +309,7 @@ export function EnergyCard({ car, p }: { car: CarEntry; p: LiveProjection }) {
         <span className="k">Proj. at finish</span>
         <span className="v">{u.pct(atFinish)} %</span>
         <span className="k">Status</span>
-        <span className={`v c-${sColor}`}>{p.energySavePct > 0 ? `SAVE ${u.n(p.energySavePct, 1)}%` : status}</span>
+        <span className={`v ${sColor ? `c-${sColor}` : ''}`}>{p.energySavePct > 0 ? `SAVE ${u.n(p.energySavePct, 1)}%` : status}</span>
       </div>
     </Panel>
   );

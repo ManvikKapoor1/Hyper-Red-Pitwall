@@ -12,10 +12,13 @@ import {
   requiredFuelPerLap,
 } from './model';
 import { calculateStrategy, type SimOptions, type SimStint, type SimStop, type StrategyResult } from './simulate';
-import type { CarEntry, Confidence, FuelMethod, LapRecord, Race, RaceClock, ScenarioEvent, Settings } from './types';
+import type { CarEntry, CarSetup, Confidence, DriveMode, FuelMethod, LapRecord, Race, RaceClock, ScenarioEvent, Settings } from './types';
 
 export interface MeasuredRate {
+  /** Rate for the current driver in the current drive mode (what the car uses now). */
   value: number;
+  /** Car-level rate: normal mode, reference driver — the simulation's base input. */
+  base: number;
   source: string;
   samples: number;
   confidence: Confidence;
@@ -33,8 +36,8 @@ export type RaceStateName =
   | 'PIT STOP'
   | 'PIT EXIT'
   | 'NEW STINT'
-  | 'SAFETY CAR'
-  | 'SLOW ZONE'
+  | 'WEATHER'
+  | 'INCIDENT'
   | 'STRATEGY CHANGE'
   | 'FINISH';
 
@@ -48,8 +51,8 @@ export const RACE_STATES: RaceStateName[] = [
   'PIT STOP',
   'PIT EXIT',
   'NEW STINT',
-  'SAFETY CAR',
-  'SLOW ZONE',
+  'WEATHER',
+  'INCIDENT',
   'STRATEGY CHANGE',
   'FINISH',
 ];
@@ -66,7 +69,7 @@ export interface LiveProjection {
   totalStints: number;
   fuelRate: MeasuredRate;
   energyRate: MeasuredRate;
-  pace: { avgMs: number; lastMs: number | null; bestMs: number | null; biasMs: number; samples: number; predictedMs: number };
+  pace: { avgMs: number; lastMs: number | null; bestMs: number | null; biasMs: number; samples: number; modelMs: number; predictedMs: number };
   sim: StrategyResult;
   current?: SimStint;
   nextStint?: SimStint;
@@ -130,34 +133,57 @@ function selectLaps(car: CarEntry, method: FuelMethod, lastN: number): { laps: L
   }
 }
 
-/** calculateFuelPerLap (measured) — chooses the strategist's calculation method. */
+const modeFuelFactor = (setup: CarSetup, mode: DriveMode) => 1 + (setup.modes[mode]?.fuelPct ?? 0) / 100;
+const modeEnergyFactor = (setup: CarSetup, mode: DriveMode) => 1 + (setup.modes[mode]?.energyPct ?? 0) / 100;
+
+/**
+ * calculateFuelPerLap (measured) — chooses the strategist's calculation method.
+ * Every lap is normalised by the driver and drive mode it was driven with, so a
+ * window that spans a driver change or a fuel-save phase still measures the car.
+ */
 export function measureFuelPerLap(car: CarEntry, settings: Settings): MeasuredRate {
-  const { live, setup } = car;
+  const { live, setup, drivers } = car;
+  const dmap = new Map(drivers.map((d) => [d.id, d]));
+  const nowFactor = driverFuelFactor(setup, dmap.get(live.driverId)) * modeFuelFactor(setup, live.driveMode);
   const stale = live.lapsCompleted - live.lastUpdateLap >= settings.alerts.staleDataLaps;
   if (live.fuelMethod === 'user' && live.userFuelPerLapL) {
-    return { value: live.userFuelPerLapL, source: 'User-defined value', samples: 0, confidence: 'MEDIUM', measured: false, spread: 0 };
+    return { value: live.userFuelPerLapL, base: live.userFuelPerLapL / nowFactor, source: 'User-defined value', samples: 0, confidence: 'MEDIUM', measured: false, spread: 0 };
   }
   const { laps, label } = selectLaps(car, live.fuelMethod, live.lastN);
-  const vals = laps.map((l) => l.fuelUsedL).filter((v): v is number => v != null && v > 0);
+  const vals = laps
+    .filter((l) => l.fuelUsedL != null && l.fuelUsedL > 0)
+    .map((l) => l.fuelUsedL! / (driverFuelFactor(setup, dmap.get(l.driverId)) * modeFuelFactor(setup, l.mode ?? live.driveMode)));
   if (!vals.length) {
-    return { value: setup.fuelPerLapL, source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+    return { value: setup.fuelPerLapL * nowFactor, base: setup.fuelPerLapL, source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
   }
   const { mean, cv } = stats(vals);
-  return { value: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
+  return { value: mean * nowFactor, base: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
 }
 
 export function measureEnergyPerLap(car: CarEntry, settings: Settings): MeasuredRate {
   const { live, setup } = car;
+  const nowFactor = modeEnergyFactor(setup, live.driveMode);
   const stale = live.lapsCompleted - live.lastUpdateLap >= settings.alerts.staleDataLaps;
+  if (!setup.energyEnabled) return { value: 0, base: 0, source: 'Energy disabled', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
   const method = live.fuelMethod === 'user' ? 'lastN' : live.fuelMethod;
   const { laps, label } = selectLaps(car, method, live.lastN);
-  const vals = laps.map((l) => l.energyUsedPct).filter((v): v is number => v != null && v > 0);
-  if (!setup.energyEnabled) return { value: 0, source: 'Energy disabled', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+  const vals = laps.filter((l) => l.energyUsedPct != null && l.energyUsedPct > 0).map((l) => l.energyUsedPct! / modeEnergyFactor(setup, l.mode ?? live.driveMode));
   if (!vals.length) {
-    return { value: netEnergyPerLap(setup), source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
+    const net = netEnergyPerLap(setup);
+    return { value: net * nowFactor, base: net, source: 'Initial estimate (assumption)', samples: 0, confidence: 'LOW', measured: false, spread: 0 };
   }
   const { mean, cv } = stats(vals);
-  return { value: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
+  return { value: mean * nowFactor, base: mean, source: `${label} · ${vals.length} lap${vals.length > 1 ? 's' : ''}`, samples: vals.length, confidence: confidenceFrom(vals.length, cv, stale), measured: true, spread: cv };
+}
+
+/**
+ * Expected green-flag time of the lap now being driven: the lap model for the
+ * current driver, mode, tire age and fuel load, corrected by how the timed
+ * green laps so far compared with the model. Falls back to the setup pace.
+ */
+export function referenceLapMs(car: CarEntry): number {
+  const ms = measurePace(car, 5).predictedMs;
+  return Number.isFinite(ms) && ms > 0 ? ms : car.setup.racePaceMs;
 }
 
 export function measurePace(car: CarEntry, lastN: number) {
@@ -173,12 +199,15 @@ export function measurePace(car: CarEntry, lastN: number) {
         driver: dmap.get(l.driverId),
         compound: getCompound(setup, l.compound),
         tireAge: Math.max(0, l.tireAge - 1),
-        mode: live.driveMode,
+        mode: l.mode ?? live.driveMode,
         fuelL: l.fuelAfterL + (l.fuelUsedL ?? 0),
       });
       return l.lapMs - pred;
     });
-    bias = diffs.reduce((a, b) => a + b, 0) / diffs.length;
+    // median: one lap in traffic or an untagged slow lap does not move the pace
+    const d = diffs.sort((a, b) => a - b);
+    const m = d.length >> 1;
+    bias = d.length % 2 ? d[m] : (d[m - 1] + d[m]) / 2;
   }
   const avg = recent.length ? recent.reduce((a, l) => a + l.lapMs, 0) / recent.length : 0;
   const predictedMs = predictLapMs({
@@ -189,7 +218,7 @@ export function measurePace(car: CarEntry, lastN: number) {
     mode: live.driveMode,
     fuelL: live.fuelL,
   });
-  return { avgMs: avg, lastMs: live.lastLapMs, bestMs: live.bestLapMs, biasMs: bias, samples: recent.length, predictedMs: predictedMs + bias };
+  return { avgMs: avg, lastMs: live.lastLapMs, bestMs: live.bestLapMs, biasMs: bias, samples: recent.length, modelMs: predictedMs, predictedMs: predictedMs + bias };
 }
 
 export function deriveRaceState(race: Race, car: CarEntry, windowState: WindowState, nowSec: number): RaceStateName {
@@ -201,10 +230,7 @@ export function deriveRaceState(race: Race, car: CarEntry, windowState: WindowSt
   if (live.pitPhase === 'stationary') return 'PIT STOP';
   if (live.pitPhase === 'exit') return 'PIT EXIT';
   const ev = activeEventAt(race.events, nowSec);
-  if (ev) {
-    if (ev.type === 'SLOW_ZONE') return 'SLOW ZONE';
-    if (ev.type === 'SAFETY_CAR' || ev.type === 'FCY' || ev.type === 'VSC' || ev.type === 'RED_FLAG') return 'SAFETY CAR';
-  }
+  if (ev) return ev.type === 'CUSTOM' ? 'INCIDENT' : 'WEATHER';
   if (live.lapsCompleted < 1 && live.stintIndex === 0) return 'START';
   if (live.strategyChangedLap != null && live.lapsCompleted + 1 - live.strategyChangedLap <= 1) return 'STRATEGY CHANGE';
   if (live.stintIndex > 0 && live.lapsCompleted + 1 - live.stintStartLap < 2) return 'NEW STINT';
@@ -219,17 +245,11 @@ export function liveSimOptions(
   settings: Settings,
   m?: { fuelRate: MeasuredRate; energyRate: MeasuredRate; pace: ReturnType<typeof measurePace> },
 ): SimOptions {
-  const { live, setup, plan, drivers } = car;
+  const { live, setup, plan } = car;
   const fuelRate = m?.fuelRate ?? measureFuelPerLap(car, settings);
   const energyRate = m?.energyRate ?? measureEnergyPerLap(car, settings);
   const pace = m?.pace ?? measurePace(car, live.lastN);
   const racing = live.phase === 'racing' || live.phase === 'finished';
-  const currentDriver = drivers.find((d) => d.id === live.driverId);
-  // neutralise the measured value to a normal-mode, reference-driver rate
-  const modeFuel = 1 + (setup.modes[live.driveMode]?.fuelPct ?? 0) / 100;
-  const modeEnergy = 1 + (setup.modes[live.driveMode]?.energyPct ?? 0) / 100;
-  const baseFuel = fuelRate.measured || live.fuelMethod === 'user' ? fuelRate.value / (driverFuelFactor(setup, currentDriver) * modeFuel) : undefined;
-  const baseEnergy = energyRate.measured ? energyRate.value / modeEnergy : undefined;
   return {
     initial: racing
       ? {
@@ -245,8 +265,8 @@ export function liveSimOptions(
           mode: live.driveMode,
         }
       : undefined,
-    fuelPerLapL: baseFuel,
-    energyPerLapPct: baseEnergy,
+    fuelPerLapL: fuelRate.base,
+    energyPerLapPct: setup.energyEnabled ? energyRate.base : undefined,
     paceBiasMs: pace.samples >= 2 ? pace.biasMs : undefined,
     events: race.events,
     pitLapOverrides: live.pitLapOverrides,
@@ -266,14 +286,19 @@ export function projectLive(race: Race, car: CarEntry, settings: Settings, nowSe
   const current = sim.stints[0];
   const nextStint = sim.stints[1];
   const nextStop = sim.stops[0];
-  const currentLap = racing ? live.lapsCompleted + 1 : 0;
+  // after the flag the last lap driven is the current one and nothing is left to plan
+  const finished = live.phase === 'finished';
+  const currentLap = finished ? live.lapsCompleted : racing ? live.lapsCompleted + 1 : 0;
   const isFinalStint = !nextStop;
 
   const liveFpl = fuelRate.value;
   const liveEpl = energyRate.value;
-  const fuelRange = calculateFuelRemainingLaps(live.fuelL, liveFpl, setup.fuelSafetyMarginLaps);
+  // safe ranges allow for the lap-to-lap scatter of the measurement (one standard deviation)
+  const fuelTheo = calculateFuelRemainingLaps(live.fuelL, liveFpl, setup.fuelSafetyMarginLaps);
+  const fuelSafe = calculateFuelRemainingLaps(live.fuelL, liveFpl * (1 + fuelRate.spread), setup.fuelSafetyMarginLaps);
+  const fuelRange = { theoretical: fuelTheo.theoretical, safe: fuelSafe.safe, safeWhole: fuelSafe.safeWhole };
   const eTheo = setup.energyEnabled && liveEpl > 0 ? live.energyPct / liveEpl : Infinity;
-  const eSafe = setup.energyEnabled && liveEpl > 0 ? (live.energyPct - setup.energyReservePct) / liveEpl : Infinity;
+  const eSafe = setup.energyEnabled && liveEpl > 0 ? (live.energyPct - setup.energyReservePct) / (liveEpl * (1 + energyRate.spread)) : Infinity;
   const energyRange = { theoretical: eTheo, safe: eSafe, safeWhole: Math.max(0, Math.floor(eSafe + 1e-9)) };
 
   const target = current ? current.endLap : currentLap;
@@ -297,17 +322,17 @@ export function projectLive(race: Race, car: CarEntry, settings: Settings, nowSe
   const fuelAtPitLaps = liveFpl > 0 ? fuelAtPitL / liveFpl : Infinity;
   const energyAtPitPct = current ? current.energyEndPct : live.energyPct;
   const tireAgeAtPit = current ? current.tireAgeEnd : live.tireAge;
-  const fuelToFinishStintL = liveFpl * lapsInclCurrent;
-  const lapsToFinish = Math.max(0, sim.totalLaps - currentLap + 1);
+  const fuelToFinishStintL = finished ? 0 : liveFpl * lapsInclCurrent;
+  const lapsToFinish = finished ? 0 : Math.max(0, sim.totalLaps - currentLap + 1);
   const fuelToFinishRaceL = liveFpl * lapsToFinish;
 
   const reqFpl = requiredFuelPerLap(live.fuelL, lapsInclCurrent, setup.fuelSafetyMarginLaps, liveFpl);
-  const fuelSavePct = liveFpl > 0 && reqFpl < liveFpl ? (1 - reqFpl / liveFpl) * 100 : 0;
+  const fuelSavePct = !finished && liveFpl > 0 && reqFpl < liveFpl ? (1 - reqFpl / liveFpl) * 100 : 0;
   const reqEpl = setup.energyEnabled ? Math.max(0, live.energyPct - setup.energyReservePct) / lapsInclCurrent : Infinity;
-  const energySavePct = setup.energyEnabled && liveEpl > 0 && reqEpl < liveEpl ? (1 - reqEpl / liveEpl) * 100 : 0;
+  const energySavePct = !finished && setup.energyEnabled && liveEpl > 0 && reqEpl < liveEpl ? (1 - reqEpl / liveEpl) * 100 : 0;
   const planStint = plan.stints[live.stintIndex];
   let energyTargetPct: number | null = null;
-  if (setup.energyEnabled && racing) {
+  if (setup.energyEnabled && racing && !finished) {
     const stintLaps = Math.max(1, (current ? current.endLap : target) - live.stintStartLap + 1);
     const budget = planStint?.energyTargetPct ?? Math.max(0, live.stintStartEnergyPct - setup.energyReservePct);
     const doneLaps = Math.max(0, currentLap - live.stintStartLap);

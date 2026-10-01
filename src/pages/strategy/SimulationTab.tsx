@@ -12,10 +12,12 @@ import { useStore } from '../../store/store';
 import { marginClass } from '../../lib/margins';
 import { IssueList, type TabProps } from './shared';
 
-export function SimulationTab({ race, car, res }: TabProps) {
+export function SimulationTab({ race, car }: TabProps) {
   const u = useUnits();
   const setPlannedEvents = useStore((s) => s.setPlannedEvents);
-  const withEv = usePlanResult(race, car, true);
+  // planning what-ifs: the whole race from lap 1, with and without the planned scenarios
+  const res = usePlanResult(race, car, { fromStart: true });
+  const withEv = usePlanResult(race, car, { plannedEvents: true });
   const [adding, setAdding] = useState<ScenarioType | null>(null);
   const events = race.plannedEvents;
   const update = (id: string, patch: Partial<ScenarioEvent>) => setPlannedEvents(race.id, events.map((e) => (e.id === id ? { ...e, ...patch } : e)));
@@ -39,7 +41,7 @@ export function SimulationTab({ race, car, res }: TabProps) {
           bodyClass="flush"
         >
           {events.length === 0 ? (
-            <div className="empty">No scenarios planned. Add a safety car, slow zone or weather change to see how the plan reacts. Every effect is your own estimate.</div>
+            <div className="empty">No scenarios planned. Add rain, a drying track or an incident to see how the plan reacts. Every effect is your own estimate.</div>
           ) : (
             <table className="table">
               <thead>
@@ -51,7 +53,6 @@ export function SimulationTab({ race, car, res }: TabProps) {
                   <th className="n" style={{ width: 90 }}>Lap Δ s</th>
                   <th className="n" style={{ width: 90 }}>Fuel −%</th>
                   {car.setup.energyEnabled && <th className="n" style={{ width: 90 }}>Energy −%</th>}
-                  <th>Pit</th>
                   <th />
                 </tr>
               </thead>
@@ -79,11 +80,6 @@ export function SimulationTab({ race, car, res }: TabProps) {
                         <NumInput size="sm" value={e.energyReductionPct} decimals={0} min={-100} max={100} onChange={(v) => update(e.id, { energyReductionPct: v })} />
                       </td>
                     )}
-                    <td>
-                      <button className="btn xs" onClick={() => update(e.id, { pitOpen: !e.pitOpen })}>
-                        {e.pitOpen ? 'OPEN' : 'CLOSED'}
-                      </button>
-                    </td>
                     <td className="right">
                       <button className="btn xs ghost" onClick={() => setPlannedEvents(race.id, events.filter((x) => x.id !== e.id))}>
                         Remove
@@ -115,7 +111,6 @@ export function SimulationTab({ race, car, res }: TabProps) {
                 <th className="n">In-lap (events)</th>
                 <th className="n">Time (events)</th>
                 <th className="n">Δ time</th>
-                <th>Under</th>
               </tr>
             </thead>
             <tbody>
@@ -130,7 +125,6 @@ export function SimulationTab({ race, car, res }: TabProps) {
                     <td className="n">{b?.lap ?? '—'}</td>
                     <td className="n">{b ? formatClock(b.entrySec) : '—'}</td>
                     <td className="n">{a && b ? `${formatDelta(b.entrySec - a.entrySec, 0)} s` : '—'}</td>
-                    <td className={b?.underEvent ? 'c-amber' : 'dim'}>{b?.underEvent ? b.underEvent.replace('_', ' ') : '—'}</td>
                   </tr>
                 );
               })}

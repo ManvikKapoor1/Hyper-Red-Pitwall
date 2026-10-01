@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { createDemoRace } from '../../data/samples';
+import { createCompletedSample, createDemoRace } from '../../data/samples';
+import { postRaceSummary } from '../analysis';
 import { generateRaceCalls } from '../calls';
 import { DEFAULT_SETTINGS } from '../factory';
 import { projectLive } from '../live';
@@ -11,7 +12,7 @@ import { withTirePattern } from '../planner';
 import { lapTrace } from '../trace';
 import { fuelSensitivity, tireOptions } from '../whatif';
 import { validateRaceData } from '../validate';
-import { formatClock, formatLapMs, parseLapTime } from '../format';
+import { formatClock, formatLapMs, fuelRateText, fuelText, parseClock, parseLapTime } from '../format';
 
 describe('model', () => {
   test('fuel range distinguishes theoretical and safe laps', () => {
@@ -163,5 +164,57 @@ describe('opportunities', () => {
   });
   test('finished races have nothing to scan', () => {
     expect(findOpportunities(race, { ...car, live: { ...car.live, phase: 'finished' } }, DEFAULT_SETTINGS)).toBeNull();
+  });
+});
+
+describe('parsing & unit text', () => {
+  test('lap times', () => {
+    expect(parseLapTime('1:35.212')).toBe(95212);
+    expect(parseLapTime('95.2')).toBe(95200);
+    expect(parseLapTime('1:35,5')).toBe(95500);
+    expect(parseLapTime('1:75.000')).toBeNull();
+    expect(parseLapTime('0')).toBeNull();
+    expect(parseLapTime('abc')).toBeNull();
+    for (const ms of [59999, 60000, 95212, 211500, 3599999]) expect(parseLapTime(formatLapMs(ms))).toBe(ms);
+  });
+  test('race clock', () => {
+    expect(parseClock('3:41:28')).toBe(13288);
+    expect(parseClock('41:28')).toBe(2488);
+    expect(parseClock('13288')).toBe(13288);
+    expect(parseClock('1:75:00')).toBeNull();
+    expect(parseClock('-5')).toBeNull();
+    expect(parseClock('1:2:3:4')).toBeNull();
+    for (const s of [0, 59, 3600, 13288, 86399]) expect(parseClock(formatClock(s))).toBe(s);
+  });
+  test('fuel text follows the unit', () => {
+    expect(fuelText(37.85411784, 'gal')).toBe('10.00 gal');
+    expect(fuelText(12.345, 'L')).toBe('12.3 L');
+    expect(fuelRateText(3.785411784, 'gal')).toBe('1.000 gal/lap');
+  });
+});
+
+describe('post-race totals', () => {
+  test('fuel used counts every lap, including pit in-laps without a reading', () => {
+    const race = createCompletedSample();
+    const car = race.cars[0];
+    const sum = postRaceSummary(race, car);
+    const first = car.live.laps[0];
+    const start = first.fuelAfterL + (first.fuelUsedL ?? 0);
+    const added = car.live.stops.reduce((a, s) => a + s.fuelAddedL, 0);
+    expect(sum.fuelUsedL).toBeCloseTo(start + added - car.live.fuelL, 6);
+    expect(sum.stints.reduce((a, s) => a + s.fuelUsedL, 0)).toBeCloseTo(sum.fuelUsedL, 6);
+    expect(sum.lapsCompleted).toBe(car.live.laps.length);
+  });
+  test('deleting a lap keeps the total and the per-lap average', () => {
+    const race = createCompletedSample();
+    const car = race.cars[0];
+    const before = postRaceSummary(race, car);
+    // drop a mid-stint lap without a typed reading; the next lap's fuel drop now covers two laps
+    const victim = car.live.laps.find((l, i) => i > 3 && !l.pitIn && !car.live.laps[i + 1]?.pitIn && !car.live.stops.some((s) => s.lap === l.lap))!;
+    const next = car.live.laps.find((l) => l.lap === victim.lap + 1)!;
+    const cut = { ...car, live: { ...car.live, laps: car.live.laps.filter((l) => l !== victim).map((l) => (l === next ? { ...l, fuelUsedL: null } : l)) } };
+    const after = postRaceSummary(race, cut);
+    expect(after.fuelUsedL).toBeCloseTo(before.fuelUsedL, 6);
+    expect(after.avgFuelPerLapL).toBeCloseTo(before.avgFuelPerLapL, 6);
   });
 });

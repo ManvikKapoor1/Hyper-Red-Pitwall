@@ -2,6 +2,7 @@
  * Race-call generation. Produces SUGGESTED pitwall calls from the live
  * projection. Nothing is sent to the driver — the strategist decides.
  */
+import { fuelRateText, fuelText } from './format';
 import { TEMPLATE_LABEL } from './model';
 import type { LiveProjection } from './live';
 import type { CallPriority, CarEntry, Confidence, DriveMode, Race, Settings } from './types';
@@ -22,6 +23,8 @@ export interface RaceCall {
   boxLap?: number;
   action?: CallAction;
   altAction?: CallAction;
+  /** Unplanned stop (splash): what to put in. */
+  pit?: { fuelAddedL: number; energyAddedPct: number };
 }
 
 export interface AlertItem {
@@ -45,6 +48,52 @@ function lapsTxt(n: number) {
 const f1 = (n: number) => (isFinite(n) ? n.toFixed(1) : '∞');
 const f2 = (n: number) => (isFinite(n) ? n.toFixed(2) : '∞');
 
+/** Extra saving (%) switching from `from` to `to` gives, relative to what the car burns now. */
+export function modeSaving(setup: CarEntry['setup'], from: DriveMode, to: DriveMode, kind: 'fuel' | 'energy'): number {
+  const k = kind === 'fuel' ? 'fuelPct' : 'energyPct';
+  const a = 1 + (setup.modes[from]?.[k] ?? 0) / 100;
+  const b = 1 + (setup.modes[to]?.[k] ?? 0) / 100;
+  return a > 0 ? Math.max(0, (1 - b / a) * 100) : 0;
+}
+
+/** Whether switching to `mode` for the rest of the stint keeps fuel ≥ `warnLaps` and energy above reserve. */
+function affordable(car: CarEntry, p: LiveProjection, mode: DriveMode, warnLaps: number): boolean {
+  const { setup, live } = car;
+  const cur = p.current;
+  if (!cur) return false;
+  const lapsLeft = Math.max(1, cur.endLap - p.currentLap + 1);
+  const ff = (1 + (setup.modes[mode]?.fuelPct ?? 0) / 100) / (1 + (setup.modes[live.driveMode]?.fuelPct ?? 0) / 100);
+  const fuelEnd = cur.fuelEndL - p.fuelRate.value * (ff - 1) * lapsLeft;
+  if (!(p.fuelRate.value > 0) || fuelEnd / (p.fuelRate.value * ff) < warnLaps) return false;
+  if (setup.energyEnabled && p.energyRate.value > 0) {
+    const ef = (1 + (setup.modes[mode]?.energyPct ?? 0) / 100) / (1 + (setup.modes[live.driveMode]?.energyPct ?? 0) / 100);
+    const energyEnd = cur.energyEndPct - p.energyRate.value * (ef - 1) * lapsLeft;
+    if (energyEnd < setup.energyReservePct + p.energyRate.value * ef) return false;
+  }
+  return true;
+}
+
+/**
+ * Fuel / energy to add at an unplanned stop on `boxLap` so the car reaches the
+ * flag with the planning reserve (measured rates, current mode).
+ */
+export function splashAmounts(car: CarEntry, p: LiveProjection, boxLap: number) {
+  const { setup, live } = car;
+  const lapsTo = Math.max(0, boxLap - p.currentLap + 1);
+  const lapsAfter = Math.max(0, p.totalLaps - boxLap);
+  // plan with the rate plus its scatter and keep the larger of reserve / safety margin at the flag
+  const fpl = p.fuelRate.value * (1 + p.fuelRate.spread);
+  const epl = p.energyRate.value * (1 + p.energyRate.spread);
+  const fuelAtPit = Math.max(0, live.fuelL - p.fuelRate.value * lapsTo);
+  const fuelNeed = fpl * (lapsAfter + Math.max(setup.fuelReserveLaps, setup.fuelSafetyMarginLaps));
+  const energyAtPit = Math.max(0, live.energyPct - p.energyRate.value * lapsTo);
+  const energyNeed = epl * lapsAfter + setup.energyReservePct;
+  return {
+    fuelAddedL: Math.min(Math.max(0, setup.fuelCapacityL - fuelAtPit), Math.max(0, fuelNeed - fuelAtPit)),
+    energyAddedPct: setup.energyEnabled ? Math.min(Math.max(0, setup.energyCapacityPct - energyAtPit), Math.max(0, energyNeed - energyAtPit)) : 0,
+  };
+}
+
 export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection, settings: Settings): RaceCall[] {
   const { live, setup, drivers } = car;
   const calls: RaceCall[] = [];
@@ -53,6 +102,9 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   const L = p.currentLap;
   const T = p.window.target;
   const ns = p.nextStop;
+  const fu = settings.units.fuel;
+  const fuel = (l: number) => fuelText(l, fu);
+  const rate = (l: number) => fuelRateText(l, fu);
 
   // ── pre-race / finished ─────────────────────────────────────────────────────
   if (live.phase === 'pre' || live.phase === 'grid') {
@@ -63,7 +115,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
       priority: 'INFO',
       reasons: [
         `Plan: ${p.sim.stops.length} stops · ${p.sim.totalLaps} laps projected`,
-        `Start fuel ${f1(s0?.fuelStartL ?? 0)} L · ${s0?.compound ?? ''} tires`,
+        `Start fuel ${fuel(s0?.fuelStartL ?? 0)} · ${s0?.compound ?? ''} tires`,
       ],
       confidence: 'LOW',
       category: 'info',
@@ -81,7 +133,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
     calls.push({
       key: 'PIT_SERVICE',
       text: s
-        ? `${TEMPLATE_LABEL[s.template]} · +${f1(s.fuelAddedL)} L`
+        ? `${TEMPLATE_LABEL[s.template]} · +${fuel(s.fuelAddedL)}`
         : 'PIT SERVICE',
       priority: 'ACTION',
       reasons: s
@@ -100,7 +152,6 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   const energySafe = setup.energyEnabled ? p.energyRange.safeWhole : Infinity;
   const resSafe = Math.min(fuelSafe, energySafe);
   const limiter = fuelSafe <= energySafe ? 'Fuel' : 'Energy';
-  const ev = p.activeEvent;
 
   if (!live.pitPhase) {
     if (p.isFinalStint) {
@@ -110,48 +161,67 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
       const eMargin = s ? s.energyMarginLaps : Infinity;
       const worst = Math.min(marginLaps, eMargin);
       const res = marginLaps <= eMargin ? 'Fuel' : 'Energy';
+      const saveMode: DriveMode = res === 'Fuel' ? 'fuelSave' : 'energySave';
+      const need = res === 'Fuel' ? p.fuelSavePct : p.energySavePct;
+      const avail = modeSaving(setup, live.driveMode, saveMode, res === 'Fuel' ? 'fuel' : 'energy');
       if (worst < 0) {
-        const savePct = res === 'Fuel' ? p.fuelSavePct : p.energySavePct;
-        const maxSave = Math.abs(setup.modes.fuelSave.fuelPct);
-        const canSave = savePct <= Math.max(maxSave, 1) * 1.5;
+        const canSave = need > 0 && need <= avail;
+        const boxLap = Math.max(L, L + resSafe - 1);
+        const amounts = splashAmounts(car, p, boxLap);
+        const when = boxLap <= L ? 'THIS LAP' : boxLap === L + 1 ? 'NEXT LAP' : `LAP ${boxLap}`;
+        const splashTxt = `SPLASH — BOX ${when}`;
         calls.push({
           key: canSave ? 'SAVE_TO_FLAG' : 'SPLASH_REQUIRED',
-          text: canSave ? `${res.toUpperCase()} SAVE TO FLAG` : 'SPLASH REQUIRED',
+          text: canSave ? `${res.toUpperCase()} SAVE TO FLAG` : splashTxt,
           priority: 'CRITICAL',
           reasons: [
             `${res} short by ${f1(Math.abs(worst))} laps at the flag`,
             res === 'Fuel'
-              ? `Target ${f2(p.fuelRequiredPerLap)} L/lap (now ${f2(p.fuelRate.value)})`
+              ? `Target ${rate(p.fuelRequiredPerLap)} (now ${rate(p.fuelRate.value)})`
               : `Target ${f2(p.energyRequiredPerLap)} %/lap (now ${f2(p.energyRate.value)})`,
+            canSave ? `${res === 'Fuel' ? 'Fuel' : 'Energy'} save mode gives −${f1(avail)}% (need −${f1(need)}%)` : `Splash +${fuel(amounts.fuelAddedL)}${setup.energyEnabled ? ` · +${f1(amounts.energyAddedPct)} % energy` : ''}`,
           ],
           confidence: conf,
-          alternative: canSave ? 'SPLASH & DASH' : `${res.toUpperCase()} SAVE ${f1(savePct)}%`,
+          alternative: canSave ? splashTxt : avail > 0 ? `${res.toUpperCase()} SAVE ${f1(avail)}% (NOT ENOUGH)` : undefined,
           category: res === 'Fuel' ? 'fuel' : 'energy',
-          action: canSave ? { type: 'mode', mode: res === 'Fuel' ? 'fuelSave' : 'energySave' } : undefined,
+          boxLap: canSave ? undefined : boxLap,
+          action: canSave ? { type: 'mode', mode: saveMode } : { type: 'boxLap', lap: boxLap },
+          altAction: canSave ? { type: 'boxLap', lap: boxLap } : undefined,
+          pit: amounts,
         });
-      } else if (worst < settings.alerts.fuelMarginWarnLaps) {
+      } else if (worst < settings.alerts.fuelMarginCritLaps && avail > 0 && need > 0) {
+        calls.push({
+          key: 'SAVE_TO_FLAG_MARGIN',
+          text: `${res.toUpperCase()} SAVE — MARGIN ${f1(worst)} LAPS`,
+          priority: 'ACTION',
+          reasons: [`${res} margin at flag ${f1(worst)} laps (below ${settings.alerts.fuelMarginCritLaps})`, `Save mode gives −${f1(avail)}%`],
+          confidence: conf,
+          alternative: 'MAINTAIN PACE',
+          category: res === 'Fuel' ? 'fuel' : 'energy',
+          action: { type: 'mode', mode: saveMode },
+        });
+      } else if (worst < settings.alerts.fuelMarginWarnLaps || !affordable(car, p, 'push', settings.alerts.fuelMarginWarnLaps)) {
         calls.push({
           key: 'MAINTAIN_TO_FLAG',
-          text: 'MAINTAIN PACE — TIGHT TO FLAG',
-          priority: 'ACTION',
+          text: worst < settings.alerts.fuelMarginWarnLaps ? 'MAINTAIN PACE — TIGHT TO FLAG' : 'MAINTAIN PACE TO FLAG',
+          priority: worst < settings.alerts.fuelMarginWarnLaps ? 'ACTION' : 'INFO',
           reasons: [`${res} margin at flag ${f1(worst)} laps`],
           confidence: conf,
-          alternative: `${res.toUpperCase()} SAVE`,
+          alternative: avail > 0 ? `${res.toUpperCase()} SAVE` : undefined,
           category: 'fuel',
-          action: { type: 'mode', mode: 'normal' },
-          altAction: { type: 'mode', mode: res === 'Fuel' ? 'fuelSave' : 'energySave' },
+          altAction: avail > 0 ? { type: 'mode', mode: saveMode } : undefined,
         });
       } else {
+        const pushing = live.driveMode === 'push';
         calls.push({
           key: 'PUSH_TO_FLAG',
-          text: 'PUSH TO THE FLAG',
+          text: pushing ? 'KEEP PUSHING TO THE FLAG' : 'PUSH TO THE FLAG',
           priority: 'INFO',
-          reasons: [`Fuel margin at flag ${f1(marginLaps)} laps`, setup.energyEnabled ? `Energy margin ${f1(eMargin)} laps` : 'No further stops planned'],
+          reasons: [`Fuel margin at flag ${f1(marginLaps)} laps`, setup.energyEnabled ? `Energy margin ${f1(eMargin)} laps` : 'No further stops planned', pushing ? 'Push mode keeps the margin' : 'Push mode still keeps the margin (entered effect)'],
           confidence: conf,
           alternative: 'MAINTAIN PACE',
           category: 'info',
-          action: { type: 'mode', mode: 'push' },
-          altAction: { type: 'mode', mode: 'normal' },
+          action: pushing ? undefined : { type: 'mode', mode: 'push' },
         });
       }
     } else if (resSafe <= 0) {
@@ -170,52 +240,23 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         action: { type: 'boxLap', lap: L },
         altAction: resSafe < 0 ? undefined : { type: 'boxLap', lap: L + 1 },
       });
-    } else if (ev && ev.pitOpen && L >= p.window.earliest && T - L >= 1) {
-      const green = setup.pitLaneLossSec;
-      const under = ev.pitLossUnderEventSec;
-      calls.push({
-        key: 'BOX_EVENT',
-        text: 'BOX THIS LAP',
-        priority: 'ACTION',
-        reasons: [
-          `${ev.label} — pit lane open`,
-          under != null ? `Pit-lane loss ≈ ${f1(under)} s vs ${f1(green)} s green (entered)` : 'Reduced relative pit loss (not quantified)',
-          `Inside window (earliest lap ${p.window.earliest})`,
-        ],
-        confidence: minConfidence(conf, 'MEDIUM'),
-        alternative: `STAY OUT — TARGET LAP ${T}`,
-        category: 'pit',
-        boxLap: L,
-        action: { type: 'boxLap', lap: L },
-        altAction: { type: 'none' },
-      });
-    } else if (ev && !ev.pitOpen && T - L <= 1) {
-      calls.push({
-        key: 'PIT_CLOSED',
-        text: 'STAY OUT — PIT CLOSED',
-        priority: 'ACTION',
-        reasons: [`${ev.label} — pit entry closed`, `Safe range ${resSafe} laps`],
-        confidence: conf,
-        alternative: resSafe <= 1 ? 'EMERGENCY STOP' : `BOX WHEN OPEN`,
-        category: 'pit',
-      });
     } else if (T > L + resSafe - 1) {
       // target beyond safe range → save or box early
       const latest = L + resSafe - 1;
       const savePct = limiter === 'Fuel' ? p.fuelSavePct : p.energySavePct;
-      const modeSave = Math.abs(limiter === 'Fuel' ? setup.modes.fuelSave.fuelPct : setup.modes.energySave.energyPct);
-      const canSave = savePct <= Math.max(modeSave, 1);
+      const modeSave = modeSaving(setup, live.driveMode, limiter === 'Fuel' ? 'fuelSave' : 'energySave', limiter === 'Fuel' ? 'fuel' : 'energy');
+      const canSave = savePct > 0 && savePct <= modeSave;
       if (canSave) {
         calls.push({
           key: limiter === 'Fuel' ? 'FUEL_SAVE' : 'ENERGY_SAVE',
-          text: limiter === 'Fuel' ? `FUEL SAVE — ${f2(p.fuelRequiredPerLap)} L/LAP` : `ENERGY SAVE — ${f2(p.energyRequiredPerLap)} %/LAP`,
+          text: limiter === 'Fuel' ? `FUEL SAVE — ${rate(p.fuelRequiredPerLap).toUpperCase()}` : `ENERGY SAVE — ${f2(p.energyRequiredPerLap)} %/LAP`,
           priority: 'ACTION',
           reasons: [
             `Target lap ${T} needs −${f1(savePct)}% ${limiter.toLowerCase()} use`,
             limiter === 'Fuel'
-              ? `Current ${f2(p.fuelRate.value)} L/lap · safe range to lap ${latest}`
+              ? `Current ${rate(p.fuelRate.value)} · safe range to lap ${latest}`
               : `Current ${f2(p.energyRate.value)} %/lap · safe range to lap ${latest}`,
-            `${limiter === 'Fuel' ? 'Fuel' : 'Energy'} save mode entered as −${modeSave}%`,
+            `${limiter === 'Fuel' ? 'Fuel' : 'Energy'} save mode gives −${f1(modeSave)}% from the current mode`,
           ],
           confidence: conf,
           alternative: `BOX LAP ${latest}`,
@@ -230,7 +271,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
           priority: latest <= L + 1 ? 'CRITICAL' : 'ACTION',
           reasons: [
             `${limiter} safe range ends lap ${latest} (target ${T})`,
-            `Saving needed −${f1(savePct)}% exceeds save-mode effect (−${modeSave}%)`,
+            modeSave > 0 ? `Saving needed −${f1(savePct)}% exceeds what save mode gives (−${f1(modeSave)}%)` : `Already in save mode — needs −${f1(savePct)}% more`,
           ],
           confidence: conf,
           alternative: `${limiter.toUpperCase()} SAVE ${f1(savePct)}%`,
@@ -241,7 +282,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         });
       }
     } else if (T <= L) {
-      const reasons = [`Target stint complete (lap ${T})`, `Fuel at pit ${f1(p.fuelAtPitL)} L · ${f1(p.fuelAtPitLaps)} laps margin`];
+      const reasons = [`Target stint complete (lap ${T})`, `Fuel at pit ${fuel(p.fuelAtPitL)} · ${f1(p.fuelAtPitLaps)} laps margin`];
       if (ns?.driverChange) reasons.push(`Driver change → ${dname(ns.toDriverId)}`);
       if (ns) reasons.push(ns.changeTires ? `Tires: ${ns.compound}` : 'No tire change');
       calls.push({
@@ -276,7 +317,7 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         key: 'PREPARE_PIT',
         text: `PREPARE PIT — BOX LAP ${T}`,
         priority: 'UPCOMING',
-        reasons: [`${lapsTxt(T - L)} to target`, ns ? `${TEMPLATE_LABEL[ns.template]} · +${f1(ns.fuelAddedL)} L` : ''].filter(Boolean),
+        reasons: [`${lapsTxt(T - L)} to target`, ns ? `${TEMPLATE_LABEL[ns.template]} · +${fuel(ns.fuelAddedL)}` : ''].filter(Boolean),
         confidence: conf,
         alternative: p.extendLaps > 0 ? `EXTEND ${lapsTxt(Math.min(p.extendLaps, 3))}` : undefined,
         category: 'pit',
@@ -335,7 +376,9 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   // energy
   if (setup.energyEnabled && !p.isFinalStint && p.energyRate.value > 0 && !live.pitPhase) {
     const surplusLaps = (p.energyAtPitPct - setup.energyReservePct) / p.energyRate.value;
-    if (p.energySavePct > 0.5 && !calls.some((c) => c.key === 'ENERGY_SAVE'))
+    // only a saving the energy-save mode can actually deliver (else the box call above covers it)
+    const reachable = p.energySavePct <= modeSaving(setup, live.driveMode, 'energySave', 'energy');
+    if (p.energySavePct > 0.5 && reachable && !calls.some((c) => c.key === 'ENERGY_SAVE' || c.key === 'BOX_EARLY'))
       calls.push({ key: 'ENERGY_SAVE', text: `ENERGY SAVE ${f1(p.energySavePct)}%`, priority: 'ACTION', reasons: [`Need ${f2(p.energyRequiredPerLap)} %/lap to reach lap ${T}`, `Current ${f2(p.energyRate.value)} %/lap`], confidence: p.energyRate.confidence, category: 'energy', action: { type: 'mode', mode: 'energySave' } });
     else if (surplusLaps >= 1.5)
       calls.push({ key: 'ENERGY_DEPLOY', text: `ENERGY DEPLOY +${f1(p.energyAtPitPct - setup.energyReservePct)}%`, priority: 'INFO', reasons: [`Projected ${f1(p.energyAtPitPct)}% at pit vs reserve ${setup.energyReservePct}%`], confidence: p.energyRate.confidence, category: 'energy' });
@@ -347,11 +390,11 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
     if (m >= 0 && m < settings.alerts.fuelMarginCritLaps)
       calls.push({ key: 'FUEL_MARGIN_CRIT', text: `FUEL MARGIN ${f1(m)} LAPS AT PIT`, priority: 'ACTION', reasons: [`Below ${settings.alerts.fuelMarginCritLaps}-lap threshold`], confidence: conf, category: 'fuel' });
     else if (m >= 0)
-      calls.push({ key: 'FUEL_MARGIN', text: `FUEL MARGIN +${f1(m)} LAPS`, priority: 'INFO', reasons: [`${f1(p.fuelAtPitL)} L projected at lap ${T}`], confidence: conf, category: 'fuel' });
-    if (m >= settings.alerts.fuelMarginWarnLaps && (!setup.energyEnabled || p.energySavePct === 0))
-      calls.push({ key: 'PUSH', text: 'PUSH', priority: 'INFO', reasons: ['Fuel & energy margin available'], confidence: conf, category: 'info', action: { type: 'mode', mode: 'push' } });
+      calls.push({ key: 'FUEL_MARGIN', text: `FUEL MARGIN +${f1(m)} LAPS`, priority: 'INFO', reasons: [`${fuel(p.fuelAtPitL)} projected at lap ${T}`], confidence: conf, category: 'fuel' });
+    if (live.driveMode !== 'push' && (!setup.energyEnabled || p.energySavePct === 0) && affordable(car, p, 'push', settings.alerts.fuelMarginWarnLaps))
+      calls.push({ key: 'PUSH', text: 'PUSH', priority: 'INFO', reasons: ['Push mode keeps fuel & energy margin to the stop (entered effect)'], confidence: conf, category: 'info', action: { type: 'mode', mode: 'push' } });
     else if (m >= 0)
-      calls.push({ key: 'MAINTAIN', text: 'MAINTAIN PACE', priority: 'INFO', reasons: ['Margins within plan'], confidence: conf, category: 'info', action: { type: 'mode', mode: 'normal' } });
+      calls.push({ key: 'MAINTAIN', text: 'MAINTAIN PACE', priority: 'INFO', reasons: ['Margins within plan'], confidence: conf, category: 'info' });
   }
 
   // strategy validity downstream

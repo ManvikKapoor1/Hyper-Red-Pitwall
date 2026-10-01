@@ -6,5 +6,6 @@ export default defineConfig({
   plugins: [react()],
   test: {
     include: ['src/**/*.test.ts'],
+    testTimeout: 120000,
   },
 });

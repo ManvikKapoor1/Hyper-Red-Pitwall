@@ -270,7 +270,6 @@ function Stops({ car }: { car: CarEntry }) {
                 <td className="n">{u.n(s.stationarySec, 1)}</td>
                 <td className="n">
                   {u.n(s.totalLossSec, 1)}
-                  {s.underEvent && <span className="c-amber"> *</span>}
                 </td>
               </tr>
             ))}
@@ -294,7 +293,7 @@ function InputLog({ car }: { car: CarEntry }) {
               <tr key={i.id}>
                 <td className="n dim">{formatClock(i.raceTimeSec)}</td>
                 <td className="n">L{i.lap}</td>
-                <td className="ellipsis" style={{ maxWidth: 260 }} title={i.summary}>
+                <td className="ellipsis" title={i.summary}>
                   {i.summary}
                 </td>
               </tr>
@@ -339,11 +338,11 @@ function ExportImport({ race }: { race: Race }) {
             if (!f) return;
             try {
               const data = JSON.parse(await f.text());
-              if (!confirm('Importing replaces all races, settings and the library in this browser. Continue?')) return;
+              if (!confirm('Import adds the races in this file (a race with the same id is replaced) and applies its settings. Continue?')) return;
               if (importAll(data)) {
                 setErr(null);
                 toast('Data imported', 'ok');
-              } else setErr('Not a STINT export (no races array).');
+              } else setErr('Not a STINT export (no valid races in the file).');
             } catch {
               setErr('Could not read the file as JSON.');
             }

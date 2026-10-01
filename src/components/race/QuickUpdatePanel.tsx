@@ -87,7 +87,8 @@ export function QuickUpdatePanel({ race, car, nowSec, onRecordStop }: { race: Ra
 
   const build = (): QuickUpdateInput | string => {
     const input: QuickUpdateInput = {};
-    const num = (s: string) => Number(s.replace(',', '.'));
+    // an emptied field is not a zero
+    const num = (s: string) => (s.trim() === '' ? NaN : Number(s.trim().replace(',', '.')));
     if (changed('lap')) {
       const n = num(draft.lap);
       if (!isFinite(n) || n < 1) return 'Current lap must be a number ≥ 1';
@@ -125,9 +126,16 @@ export function QuickUpdatePanel({ race, car, nowSec, onRecordStop }: { race: Ra
       input.lastLapMs = ms;
     }
     if (changed('compound')) input.compound = draft.compound;
-    if (changed('gapAhead')) input.gapAheadSec = draft.gapAhead.trim() ? num(draft.gapAhead) : null;
-    if (changed('gapBehind')) input.gapBehindSec = draft.gapBehind.trim() ? num(draft.gapBehind) : null;
-    if (changed('position')) input.position = draft.position.trim() ? Math.round(num(draft.position)) : null;
+    // gaps and position may be cleared (unknown) but not garbled
+    const optional = (s: string) => (s.trim() ? num(s) : null);
+    if (changed('gapAhead')) input.gapAheadSec = optional(draft.gapAhead);
+    if (changed('gapBehind')) input.gapBehindSec = optional(draft.gapBehind);
+    if (changed('position')) {
+      const v = optional(draft.position);
+      input.position = v == null ? null : Math.round(v);
+    }
+    if ([input.gapAheadSec, input.gapBehindSec].some((g) => g != null && (!isFinite(g) || g < 0))) return 'Gaps must be seconds ≥ 0';
+    if (input.position != null && (!isFinite(input.position) || input.position < 1)) return 'Position must be a number ≥ 1';
     if (changed('traffic')) input.traffic = draft.traffic;
     if (changed('weather')) input.weather = draft.weather;
     return input;
@@ -142,7 +150,7 @@ export function QuickUpdatePanel({ race, car, nowSec, onRecordStop }: { race: Ra
     }
     setErr(null);
     if (Object.keys(input).length === 0) return;
-    const warnings = validateRaceData(car, input, settings);
+    const warnings = validateRaceData(car, input, settings, race.events);
     if (warnings.length) {
       setPending({ input, warnings });
       return;

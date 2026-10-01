@@ -56,25 +56,28 @@ export function formatNum(v: number | null | undefined, decimals = 1): string {
   return v.toFixed(decimals);
 }
 
-/** "1:35.212" | "95.212" | "1:35" → ms */
+/** "1:35.212" | "95.212" → ms. Seconds must be below 60 when minutes are given; lap times are positive. */
 export function parseLapTime(s: string): number | null {
-  const t = s.trim();
+  const t = s.trim().replace(',', '.');
   if (!t) return null;
   const m = t.match(/^(?:(\d+):)?(\d+(?:\.\d+)?)$/);
   if (!m) return null;
   const mins = m[1] ? Number(m[1]) : 0;
   const secs = Number(m[2]);
-  if (!isFinite(secs)) return null;
-  return Math.round((mins * 60 + secs) * 1000);
+  if (!isFinite(secs) || (m[1] && secs >= 60)) return null;
+  const ms = Math.round((mins * 60 + secs) * 1000);
+  return ms > 0 ? ms : null;
 }
 
-/** "3:41:28" | "41:28" | "13288" → seconds */
+/** "3:41:28" | "41:28" | "13288" → seconds. Minutes and seconds after the first part must be below 60. */
 export function parseClock(s: string): number | null {
   const t = s.trim();
   if (!t) return null;
   const parts = t.split(':');
-  if (parts.some((p) => p === '' || isNaN(Number(p)))) return null;
-  return parts.reduce((acc, p) => acc * 60 + Number(p), 0);
+  if (parts.length > 3 || parts.some((p) => !/^\d+(\.\d+)?$/.test(p))) return null;
+  const nums = parts.map(Number);
+  if (nums.slice(1).some((n) => n >= 60)) return null;
+  return nums.reduce((acc, n) => acc * 60 + n, 0);
 }
 
 export function wallClock(startISO: string, raceSec: number, h24 = true): string {
@@ -82,4 +85,19 @@ export function wallClock(startISO: string, raceSec: number, h24 = true): string
   if (isNaN(d.getTime())) return '—';
   const t = new Date(d.getTime() + raceSec * 1000);
   return t.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: !h24 });
+}
+
+const L_PER_GAL = 3.785411784;
+export type FuelUnit = 'L' | 'gal';
+
+/** Litres → text in the user's fuel unit ("12.4 L" / "3.3 gal"). */
+export function fuelText(litres: number, unit: FuelUnit = 'L', decimals = 1): string {
+  if (!isFinite(litres)) return '—';
+  return unit === 'gal' ? `${(litres / L_PER_GAL).toFixed(decimals + 1)} gal` : `${litres.toFixed(decimals)} L`;
+}
+
+/** Litres per lap → text in the user's fuel unit. */
+export function fuelRateText(litresPerLap: number, unit: FuelUnit = 'L'): string {
+  if (!isFinite(litresPerLap)) return '—';
+  return unit === 'gal' ? `${(litresPerLap / L_PER_GAL).toFixed(3)} gal/lap` : `${litresPerLap.toFixed(2)} L/lap`;
 }

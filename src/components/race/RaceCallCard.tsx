@@ -1,7 +1,9 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 import type { CallAction, RaceCall } from '../../engine/calls';
 import type { LiveProjection } from '../../engine/live';
 import type { CallPriority, CarEntry, Race } from '../../engine/types';
+import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { Field, Modal, NumInput } from '../ui';
 import { PRIORITY_LABEL, priorityColor } from './RaceStatusBadge';
@@ -26,6 +28,7 @@ export function useApplyCall(race: Race, car: CarEntry, p: LiveProjection) {
 export function RaceCallCard({ race, car, p, call, onOverride }: { race: Race; car: CarEntry; p: LiveProjection; call?: RaceCall; onOverride: () => void }) {
   const logCall = useStore((s) => s.logCall);
   const apply = useApplyCall(race, car, p);
+  const u = useUnits();
   const [showBasis, setShowBasis] = useState(false);
   if (!call) return null;
   const color = priorityColor(call.priority);
@@ -62,7 +65,7 @@ export function RaceCallCard({ race, car, p, call, onOverride }: { race: Race; c
         {showBasis && (
           <div className="call-basis">
             <div>
-              Fuel: {p.fuelRate.value.toFixed(2)} L/lap — {p.fuelRate.source} ({p.fuelRate.confidence})
+              Fuel: {u.fpl(p.fuelRate.value)} {u.fuelUnit}/lap — {p.fuelRate.source} ({p.fuelRate.confidence})
             </div>
             {car.setup.energyEnabled && (
               <div>
@@ -76,34 +79,42 @@ export function RaceCallCard({ race, car, p, call, onOverride }: { race: Race; c
           </div>
         )}
       </div>
-      <div className="call-actions">
-        <button
-          className={`btn ${call.priority === 'CRITICAL' ? 'danger' : 'go'} grow`}
-          disabled={!!alreadyIssued}
-          onClick={() => {
-            logCall(race.id, car.id, call.text, call.priority, call.reasons.join(' · '), 'ISSUED', 'system');
-            apply(call.action, `Call accepted: ${call.text}`);
-          }}
-          title="Log as issued to the driver (C)"
-        >
-          {alreadyIssued ? 'Issued ✓' : 'Confirm & issue'}
-        </button>
-        {call.alternative && (
+      {car.live.phase === 'finished' ? (
+        <div className="call-actions">
+          <Link className="btn grow" to={`/app/race/${race.id}/analysis`}>
+            Post-race analysis
+          </Link>
+        </div>
+      ) : (
+        <div className="call-actions">
           <button
-            className="btn grow"
+            className={`btn ${call.priority === 'CRITICAL' ? 'danger' : 'go'} grow`}
+            disabled={!!alreadyIssued}
             onClick={() => {
-              logCall(race.id, car.id, call.alternative!, call.priority, `Alternative to "${call.text}"`, 'ISSUED', 'override');
-              apply(call.altAction, `Alternative chosen: ${call.alternative}`);
+              logCall(race.id, car.id, call.text, call.priority, call.reasons.join(' · '), 'ISSUED', 'system');
+              apply(call.action, `Call accepted: ${call.text}`);
             }}
-            title="Issue the alternative instead"
+            title="Log as issued to the driver (C)"
           >
-            Use alternative
+            {alreadyIssued ? 'Issued ✓' : 'Confirm & issue'}
           </button>
-        )}
-        <button className="btn warn" onClick={onOverride} title="Override the recommendation (O)">
-          Override…
-        </button>
-      </div>
+          {call.alternative && (
+            <button
+              className="btn grow"
+              onClick={() => {
+                logCall(race.id, car.id, call.alternative!, call.priority, `Alternative to "${call.text}"`, 'ISSUED', 'override');
+                apply(call.altAction, `Alternative chosen: ${call.alternative}`);
+              }}
+              title="Issue the alternative instead"
+            >
+              Use alternative
+            </button>
+          )}
+          <button className="btn warn" onClick={onOverride} title="Override the recommendation (O)">
+            Override…
+          </button>
+        </div>
+      )}
     </section>
   );
 }

@@ -10,7 +10,8 @@ body,
 }
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--ambient), var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 13px;
@@ -106,6 +107,7 @@ textarea {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0; /* lets a flex child shrink so the ellipsis can kick in */
 }
 .right {
   text-align: right;
@@ -202,6 +204,28 @@ p {
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 8px;
 }
+/* narrow screens: form grids fold so fields never sit on top of each other */
+@media (max-width: 720px) {
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  /* a wide field spans the folded grid instead of adding hidden columns */
+  .grid-3 > [class*='span-'],
+  .grid-4 > [class*='span-'] {
+    grid-column: 1 / -1;
+  }
+}
+@media (max-width: 460px) {
+  .grid-2,
+  .grid-3,
+  .grid-4 {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .grid-2 > [class*='span-'] {
+    grid-column: 1 / -1;
+  }
+}
 .sep {
   height: 1px;
   background: var(--line);
@@ -218,6 +242,7 @@ p {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow: var(--elev);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -230,7 +255,7 @@ p {
   min-height: 30px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel-2);
+  background: var(--head-bg), var(--panel-2);
 }
 .panel-h .label {
   color: var(--text-2);
@@ -244,6 +269,11 @@ p {
 .panel-b {
   padding: 10px;
   min-height: 0;
+  min-width: 0;
+}
+/* a table never spills out of its panel: it scrolls sideways instead */
+.panel-b:has(> .table) {
+  overflow-x: auto;
 }
 .panel-b.tight {
   padding: 6px 8px;
@@ -410,15 +440,15 @@ p {
 }
 .badge.solid.red {
   background: var(--red);
-  color: #fff;
+  color: var(--on-red);
 }
 .badge.solid.amber {
   background: var(--amber);
-  color: #111;
+  color: var(--on-amber);
 }
 .badge.solid.green {
   background: var(--green);
-  color: #06140b;
+  color: var(--on-green);
 }
 .badge.ghost {
   background: transparent;
@@ -479,17 +509,18 @@ p {
   font-size: 15px;
 }
 .btn.primary {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text);
+  /* the interactive blue (same as focus) marks the main action on a page */
+  background: var(--blue);
+  color: var(--on-blue);
+  border-color: var(--blue);
 }
 .btn.primary:hover {
-  background: var(--text-2);
+  filter: brightness(1.08);
 }
 .btn.go {
   background: var(--green);
   border-color: var(--green);
-  color: #04120a;
+  color: var(--on-green);
 }
 .btn.go:hover {
   filter: brightness(1.08);
@@ -726,6 +757,11 @@ textarea.input {
   white-space: nowrap;
   vertical-align: middle;
 }
+/* a truncating cell takes the spare width and clips at it instead of pushing into its neighbours */
+.table td.ellipsis {
+  max-width: 1px;
+  width: 100%;
+}
 .table td.n,
 .table th.n {
   text-align: right;
@@ -932,4 +968,14 @@ kbd,
   .pulse-red {
     animation: none;
   }
+}
+
+fieldset.bare {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+fieldset.bare:disabled {
+  opacity: 0.6;
 }

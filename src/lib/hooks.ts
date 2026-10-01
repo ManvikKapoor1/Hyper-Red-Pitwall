@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import { generateRaceCalls } from '../engine/calls';
-import { projectLive, raceNowSec } from '../engine/live';
-import { calculateStrategy } from '../engine/simulate';
+import { liveSimOptions, projectLive, raceNowSec } from '../engine/live';
+import { calculateStrategy, type SimOptions } from '../engine/simulate';
 import type { CarEntry, Race } from '../engine/types';
 import { useStore } from '../store/store';
 
@@ -39,12 +39,35 @@ export function useLive(race: Race, car: CarEntry, nowSec: number) {
 }
 
 /** Pre-race simulation of the car's plan. Planned scenarios are opt-in (Simulation tab). */
-export function usePlanResult(race: Race, car: CarEntry, withPlannedEvents = false) {
+/** True while the car is racing: plan views then project from the live state. */
+export function isLive(car: CarEntry): boolean {
+  return car.live.phase === 'racing';
+}
+
+/** Live simulation options while racing (measured rates, current state), else none. */
+export function useLiveSim(race: Race, car: CarEntry): SimOptions | undefined {
   const settings = useStore((s) => s.settings);
-  const events = withPlannedEvents ? race.plannedEvents : undefined;
+  const live = isLive(car);
+  return useMemo(() => (live ? liveSimOptions(race, car, settings) : undefined), [live, race, car, settings]);
+}
+
+/**
+ * Simulation of the car's plan. While racing it projects from the live state
+ * (lap, fuel, energy, tires, measured rates, overrides, race events) like the
+ * Live page; `fromStart` forces the whole race from lap 1, `plannedEvents`
+ * adds the planning scenarios (always from the start).
+ */
+export function usePlanResult(race: Race, car: CarEntry, opts: { plannedEvents?: boolean; fromStart?: boolean } = {}) {
+  const settings = useStore((s) => s.settings);
+  const live = isLive(car) && !opts.fromStart && !opts.plannedEvents;
+  const events = opts.plannedEvents ? race.plannedEvents : undefined;
   return useMemo(
-    () => calculateStrategy(race.params, car.setup, car.plan, car.drivers, { earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps, events }),
-    [race.params, car.setup, car.plan, car.drivers, events, settings.defaults.earlyPitThresholdLaps],
+    () =>
+      live
+        ? calculateStrategy(race.params, car.setup, car.plan, car.drivers, liveSimOptions(race, car, settings))
+        : calculateStrategy(race.params, car.setup, car.plan, car.drivers, { earlyThresholdLaps: settings.defaults.earlyPitThresholdLaps, events }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [live, live ? race : race.params, live ? car : car.plan, car.setup, car.plan, car.drivers, events, settings],
   );
 }
 

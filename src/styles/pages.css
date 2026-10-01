@@ -161,6 +161,9 @@ ul.plain {
   opacity: 0.55;
   border-style: dashed;
 }
+.flow-stint.done {
+  opacity: 0.7;
+}
 .flow-bar {
   position: absolute;
   left: 0;
@@ -249,9 +252,14 @@ ul.plain {
   flex-direction: column;
   gap: 6px;
   padding: 12px;
-  background: var(--panel);
+  background: var(--head-bg), var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow: var(--elev);
+  transition: border-color 0.12s;
+}
+.race-card:hover {
+  border-color: var(--line-3);
 }
 .race-card.is-live {
   border-left: 3px solid var(--red);
@@ -440,8 +448,10 @@ fieldset.plain-fs:disabled {
   overflow: auto;
   height: 100%;
   background:
+    radial-gradient(900px 520px at 72% 22%, color-mix(in srgb, var(--blue) 12%, transparent), transparent 65%),
+    radial-gradient(760px 440px at 12% -4%, color-mix(in srgb, var(--violet) 8%, transparent), transparent 60%),
     linear-gradient(180deg, transparent 0, var(--bg) 640px),
-    repeating-linear-gradient(90deg, var(--line) 0 1px, transparent 1px 120px),
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--line) 70%, transparent) 0 1px, transparent 1px 120px),
     var(--bg);
 }
 .ld-nav {
@@ -485,7 +495,7 @@ fieldset.plain-fs:disabled {
   background: var(--panel);
   border: 1px solid var(--line-2);
   border-radius: var(--r);
-  box-shadow: var(--shadow);
+  box-shadow: var(--shadow), 0 0 0 1px color-mix(in srgb, var(--blue) 14%, transparent), 0 0 60px color-mix(in srgb, var(--blue) 8%, transparent);
 }
 .ld-call {
   padding: 10px 12px;

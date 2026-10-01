@@ -28,7 +28,7 @@ export function PitStopsTab({ race, car, res }: TabProps) {
   const exampleFuel = Math.round(setup.fuelPerLapL * 25);
   return (
     <div className="grid-side">
-      <Panel title="Planned stops" bodyClass="flush" className="scroll-x" meta={<span className="sublabel">{res.stops.length} stops · {u.n(res.totalPitLossSec, 1)} s total loss</span>}>
+      <Panel title={car.live.phase === 'racing' ? 'Remaining stops' : 'Planned stops'} bodyClass="flush" className="scroll-x" meta={<span className="sublabel">{res.stops.length} stops · {u.n(res.totalPitLossSec, 1)} s total loss{car.live.phase === 'racing' ? ` · ${car.live.stops.length} made` : ''}</span>}>
         <table className="table">
           <thead>
             <tr>
@@ -86,9 +86,8 @@ export function PitStopsTab({ race, car, res }: TabProps) {
                 <td className="n">
                   <b>{u.n(s.totalLossSec, 1)}</b>
                 </td>
-                <td className="ellipsis" style={{ maxWidth: 220 }} title={s.reason}>
+                <td className="ellipsis" title={s.reason}>
                   {s.reason}
-                  {s.underEvent && <span className="c-amber"> · under {s.underEvent.replace('_', ' ')}</span>}
                 </td>
               </tr>
             ))}
