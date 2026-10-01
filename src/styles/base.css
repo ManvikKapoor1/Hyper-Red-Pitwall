@@ -10,7 +10,8 @@ body,
 }
 body {
   margin: 0;
-  background: var(--bg);
+  background: var(--ambient), var(--bg);
+  background-attachment: fixed;
   color: var(--text);
   font-family: var(--font-body);
   font-size: 13px;
@@ -241,6 +242,7 @@ p {
   background: var(--panel);
   border: 1px solid var(--line);
   border-radius: var(--r);
+  box-shadow: var(--elev);
   display: flex;
   flex-direction: column;
   min-width: 0;
@@ -253,7 +255,7 @@ p {
   min-height: 30px;
   padding: 5px 10px;
   border-bottom: 1px solid var(--line);
-  background: var(--panel-2);
+  background: var(--head-bg), var(--panel-2);
 }
 .panel-h .label {
   color: var(--text-2);
@@ -438,15 +440,15 @@ p {
 }
 .badge.solid.red {
   background: var(--red);
-  color: #fff;
+  color: var(--on-red);
 }
 .badge.solid.amber {
   background: var(--amber);
-  color: #111;
+  color: var(--on-amber);
 }
 .badge.solid.green {
   background: var(--green);
-  color: #06140b;
+  color: var(--on-green);
 }
 .badge.ghost {
   background: transparent;
@@ -507,17 +509,18 @@ p {
   font-size: 15px;
 }
 .btn.primary {
-  background: var(--text);
-  color: var(--bg);
-  border-color: var(--text);
+  /* the interactive blue (same as focus) marks the main action on a page */
+  background: var(--blue);
+  color: var(--on-blue);
+  border-color: var(--blue);
 }
 .btn.primary:hover {
-  background: var(--text-2);
+  filter: brightness(1.08);
 }
 .btn.go {
   background: var(--green);
   border-color: var(--green);
-  color: #04120a;
+  color: var(--on-green);
 }
 .btn.go:hover {
   filter: brightness(1.08);

@@ -62,7 +62,7 @@ export function SettingsPage() {
               value={s.theme}
               onChange={(v) => update({ theme: v })}
             />
-            <div className="sublabel">Colour is reserved for race-critical state in every theme: green OK · amber warning · red critical · blue info / alternative · violet energy.</div>
+            <div className="sublabel">Colour is reserved for race-critical state in every theme: green OK · amber warning · red critical · blue info / alternative / main action · violet energy.</div>
             <div className="row gap-4 wrap">
               <span className="badge green">OK</span>
               <span className="badge amber">Warning</span>

@@ -34,7 +34,7 @@ const FEATURES = [
 const PRINCIPLES = [
   ['Your numbers only', 'Every projection comes from values you entered, explicit assumptions or calculations. Demo values are labelled SAMPLE DATA.'],
   ['No “best” strategy', 'Alternatives get neutral tags — lower pit loss, higher fuel margin, higher risk. The strategist decides.'],
-  ['Colour means state', 'Green OK, amber warning, red critical, blue info, violet energy. Nothing else is coloured.'],
+  ['Colour means state', 'Green OK, amber warning, red critical, blue info and main actions, violet energy. Nothing else is coloured.'],
   ['Stays on your machine', 'Runs in the browser and stores data locally. Export and import JSON whenever you like.'],
 ];
 

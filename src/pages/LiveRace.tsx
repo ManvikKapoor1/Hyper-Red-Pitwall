@@ -138,7 +138,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
                     <td className="ellipsis">{driverName(car, s.driverId)}</td>
                     <td className="n">{s.laps}</td>
                     <td className="n">{s.final ? 'FLAG' : s.endLap}</td>
-                    <td className="ellipsis">{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
+                    <td>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
                     <td className={s.newTires ? '' : 'dim'}>{s.newTires ? `NEW ${s.compound}` : `${s.compound} +${s.tireAgeStart}`}</td>
                     <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
                     <td className={`n ${marginClass(s.fuelMarginLaps, crit)}`}>{u.n(s.fuelMarginLaps, 1)}</td>

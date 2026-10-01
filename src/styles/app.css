@@ -71,8 +71,8 @@ body.focus-mode .sidebar {
 }
 .nav-i.on {
   color: var(--text);
-  background: var(--panel-3);
-  border-left-color: var(--text);
+  background: linear-gradient(90deg, var(--blue-bg), transparent 85%), var(--panel-2);
+  border-left-color: var(--blue);
 }
 .nav-ic {
   display: inline-flex;
@@ -726,7 +726,7 @@ body.focus-mode .sidebar {
   background: var(--amber-bg);
 }
 .alert.critical {
-  color: #fff;
+  color: var(--on-red);
   background: var(--red);
   border-color: var(--red);
 }
@@ -874,11 +874,11 @@ body.focus-mode .sidebar {
 }
 .lg-tire {
   background: var(--green);
-  color: #04120a;
+  color: var(--on-green);
 }
 .lg-drv {
   background: var(--blue);
-  color: #fff;
+  color: var(--on-blue);
 }
 .tl-body {
   display: grid;
