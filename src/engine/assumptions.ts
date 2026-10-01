@@ -36,7 +36,7 @@ export function assumptionRows(car: CarEntry, events: ScenarioEvent[] = []): Ass
   const trace = lapTrace(car, events).filter((t) => t.green && !t.estimated);
   const fuel = trace.filter((t) => t.fuelUsedL != null && t.fuelUsedL > 0 && t.assumedFuelL > 0);
   const energy = trace.filter((t) => t.energyUsedPct != null && t.energyUsedPct > 0 && t.assumedEnergyPct > 0);
-  const lane = live.stops.filter((s) => s.stationaryTimed && s.totalTimed && !s.underEvent).map((s) => s.totalLossSec - s.stationarySec);
+  const lane = live.stops.filter((s) => s.stationaryTimed && s.totalTimed).map((s) => s.totalLossSec - s.stationarySec);
   const refuel = live.stops
     .filter((s) => s.stationaryTimed && !s.changeTires && s.fromDriverId === s.toDriverId && s.stationarySec > 0 && s.fuelAddedL > 0)
     .map((s) => s.fuelAddedL / s.stationarySec);

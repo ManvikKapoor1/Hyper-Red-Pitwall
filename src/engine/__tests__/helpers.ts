@@ -88,15 +88,13 @@ export function randomCase(seed: number): Case {
     for (let k = 0; k < 1 + Math.floor(r() * 3); k++)
       events.push({
         id: `ev${k}`,
-        type: pick(['SAFETY_CAR', 'SLOW_ZONE', 'FCY', 'RAIN'] as const),
+        type: pick(['RAIN', 'DRYING', 'CUSTOM'] as const),
         label: 'ev',
         startSec: between(0, dur),
         durationSec: between(60, 1800),
         lapDeltaSec: between(0, 40),
         fuelReductionPct: between(0, 40),
         energyReductionPct: between(0, 40),
-        pitOpen: r() < 0.7,
-        pitLossUnderEventSec: r() < 0.4 ? between(5, 30) : undefined,
       });
   }
   return { race, setup, drivers, plan, opts: { events }, label: `seed ${seed}` };

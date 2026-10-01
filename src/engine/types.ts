@@ -48,8 +48,6 @@ export interface RaceParams {
   airTempC: number;
   trackTempC: number;
   rainProbabilityPct: number;
-  safetyCarAssumption: string;
-  slowZoneAssumption: string;
 }
 
 export interface CompoundSpec {
@@ -168,18 +166,11 @@ export interface StrategyVersion {
 }
 
 // ────────────────────────────────────────────────────────────────────────────
-// Scenario events (safety car / slow zone …) — effects are always user-entered
+// Scenario events (rain, drying track, custom incident) — effects are always
+// user-entered. LMU has no safety car / full-course yellow, so none are modelled.
 // ────────────────────────────────────────────────────────────────────────────
 
-export type ScenarioType =
-  | 'SAFETY_CAR'
-  | 'SLOW_ZONE'
-  | 'FCY'
-  | 'VSC'
-  | 'RED_FLAG'
-  | 'RAIN'
-  | 'DRYING'
-  | 'CUSTOM';
+export type ScenarioType = 'RAIN' | 'DRYING' | 'CUSTOM';
 
 export interface ScenarioEvent {
   id: ID;
@@ -191,8 +182,6 @@ export interface ScenarioEvent {
   lapDeltaSec: number;
   fuelReductionPct: number;
   energyReductionPct: number;
-  pitOpen: boolean;
-  pitLossUnderEventSec?: number; // pit-lane loss while the event is active (replaces the green-flag lane loss)
   planned?: boolean; // simulation-only assumption
 }
 
@@ -230,7 +219,6 @@ export interface ActualStop {
   toDriverId: ID;
   stationarySec: number;
   totalLossSec: number;
-  underEvent?: ScenarioType;
   note?: string;
   /** true when the time was entered / timed, false when the setup estimate was accepted */
   stationaryTimed?: boolean;

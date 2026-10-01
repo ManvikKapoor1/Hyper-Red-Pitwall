@@ -97,8 +97,8 @@ export function checkFlag(params: RaceParams, live: CarLive): CarLive {
 }
 
 /**
- * Apply a manual update. `events` tags laps driven under a safety car / slow
- * zone so they are left out of the green-flag consumption and pace averages.
+ * Apply a manual update. `events` tags laps driven during a scenario (rain,
+ * incident) so they are left out of the green-flag consumption and pace averages.
  */
 export function applyQuickUpdate(car: CarEntry, input: QuickUpdateInput, nowSec: number, settings: Settings, events: ScenarioEvent[] = []): CarLive {
   const live = cloneLive(car.live);
@@ -221,7 +221,6 @@ export interface PitStopInput {
   stationarySec: number;
   totalLossSec: number;
   note?: string;
-  underEvent?: ActualStop['underEvent'];
   inLapMs?: number;
   stationaryTimed?: boolean;
   totalTimed?: boolean;
@@ -275,7 +274,6 @@ export function recordPitStop(car: CarEntry, input: PitStopInput, nowSec: number
     toDriverId: input.toDriverId,
     stationarySec: input.stationarySec,
     totalLossSec: input.totalLossSec,
-    underEvent: input.underEvent,
     note: input.note,
     stationaryTimed: input.stationaryTimed,
     totalTimed: input.totalTimed,

@@ -51,16 +51,16 @@ describe('quick update', () => {
     expect(live.laps[live.laps.length - 1].lap).toBe(L.lapsCompleted - 2);
   });
   test('laps under a scenario are tagged', () => {
-    const ev = { id: 'e', type: 'SAFETY_CAR' as const, label: 'SC', startSec: L.lastLapEndSec - 10, durationSec: 600, lapDeltaSec: 30, fuelReductionPct: 20, energyReductionPct: 20, pitOpen: true };
+    const ev = { id: 'e', type: 'CUSTOM' as const, label: 'Incident', startSec: L.lastLapEndSec - 10, durationSec: 600, lapDeltaSec: 30, fuelReductionPct: 20, energyReductionPct: 20 };
     const live = applyQuickUpdate(car, { lapsCompleted: L.lapsCompleted + 1, fuelL: L.fuelL - 2.3, lastLapMs: 126000 }, L.lastLapEndSec + 126, DEFAULT_SETTINGS, [ev]);
-    expect(live.laps[live.laps.length - 1].event).toBe('SAFETY_CAR');
+    expect(live.laps[live.laps.length - 1].event).toBe('CUSTOM');
     expect(live.bestLapMs).toBe(L.bestLapMs);
   });
 });
 
-describe('input checks after stops and cautions', () => {
+describe('input checks after stops and slow scenario laps', () => {
   const green = referenceLapMs(car);
-  const ev = { id: 'e', type: 'SAFETY_CAR' as const, label: 'SC', startSec: L.lastLapEndSec, durationSec: 3 * (green / 1000 + 35) + 1, lapDeltaSec: 35, fuelReductionPct: 25, energyReductionPct: 20, pitOpen: true };
+  const ev = { id: 'e', type: 'CUSTOM' as const, label: 'Incident', startSec: L.lastLapEndSec, durationSec: 3 * (green / 1000 + 35) + 1, lapDeltaSec: 35, fuelReductionPct: 25, energyReductionPct: 20 };
   test('normal lap after a pit stop is not questioned', () => {
     const live = recordPitStop(
       car,
@@ -72,11 +72,11 @@ describe('input checks after stops and cautions', () => {
     const w = validateRaceData(c, { lapsCompleted: live.lapsCompleted + 1, raceTimeSec: live.lastLapEndSec + green / 1000, lastLapMs: green, tireAge: 1 }, DEFAULT_SETTINGS);
     expect(w.map((x) => x.code)).toEqual([]);
   });
-  test('laps under a safety car expect the caution pace and fuel', () => {
+  test('laps during a scenario expect its pace and fuel', () => {
     const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + green / 1000 + 35, lastLapMs: green + 35000 }, DEFAULT_SETTINGS, [ev]);
     expect(w.map((x) => x.code)).toEqual([]);
   });
-  test('green lap after safety-car laps is not questioned', () => {
+  test('normal lap after scenario laps is not questioned', () => {
     let c = car;
     let t = L.lastLapEndSec;
     for (let k = 1; k <= 3; k++) {
@@ -86,14 +86,14 @@ describe('input checks after stops and cautions', () => {
     const w = validateRaceData(c, { lapsCompleted: L.lapsCompleted + 4, raceTimeSec: t + green / 1000, lastLapMs: green }, DEFAULT_SETTINGS, [ev]);
     expect(w.map((x) => x.code)).toEqual([]);
   });
-  test('first caution lap may still burn green-flag fuel', () => {
+  test('first scenario lap may still burn normal fuel', () => {
     const rate = measureFuelPerLap(car, DEFAULT_SETTINGS).value;
     const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + green / 1000, fuelL: L.fuelL - rate, lastLapMs: green }, DEFAULT_SETTINGS, [ev]);
     expect(w.map((x) => x.code)).toEqual([]);
     const typo = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, fuelL: L.fuelL - rate * 2 }, DEFAULT_SETTINGS, [ev]);
     expect(typo.map((x) => x.code)).toContain('FUEL_RATE_CHANGE');
   });
-  test('lap during which the caution ends is not questioned', () => {
+  test('lap during which the scenario ends is not questioned', () => {
     const mixed = green + 20000;
     const w = validateRaceData(car, { lapsCompleted: L.lapsCompleted + 1, raceTimeSec: L.lastLapEndSec + mixed / 1000, lastLapMs: mixed }, DEFAULT_SETTINGS, [{ ...ev, durationSec: 60 }]);
     expect(w.map((x) => x.code)).toEqual([]);

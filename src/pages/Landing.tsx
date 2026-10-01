@@ -17,7 +17,7 @@ const FEATURES = [
   {
     k: 'Live',
     t: 'Adjust the strategy mid-race',
-    d: 'Type lap, fuel, energy and tire age as the race runs. STINT re-projects the rest of the race and predicts where to gain — fewer stops, fresher tires, boxing under a safety car — with risk and confidence for each.',
+    d: 'Type lap, fuel, energy and tire age as the race runs. STINT re-projects the rest of the race and predicts where to gain — fewer stops, fresher tires, saving to the flag — with risk and confidence for each.',
   },
   {
     k: 'Calls',

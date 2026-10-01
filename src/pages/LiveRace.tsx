@@ -152,7 +152,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         </Panel>
         <WhereToGain race={race} car={car} />
         <Panel className="live-scen" bodyClass="tight">
-          <ScenarioPanel race={race} car={car} p={p} nowSec={nowSec} />
+          <ScenarioPanel race={race} car={car} nowSec={nowSec} />
           <AlertPanel alerts={alerts} />
         </Panel>
       </div>
@@ -173,7 +173,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
         </Panel>
       </div>
       {override && <OverrideModal race={race} car={car} p={p} call={top} onClose={() => setOverride(false)} />}
-      {stop && <PitStopRecorder race={race} car={car} p={p} nowSec={nowSec} prefill={stop} onClose={() => setStop(null)} />}
+      {stop && <PitStopRecorder race={race} car={car} p={p} prefill={stop} onClose={() => setStop(null)} />}
     </div>
   );
 }

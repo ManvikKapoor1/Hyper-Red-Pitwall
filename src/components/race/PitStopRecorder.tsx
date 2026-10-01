@@ -1,14 +1,14 @@
 import { useState } from 'react';
 import type { LiveProjection } from '../../engine/live';
 import { splashAmounts } from '../../engine/calls';
-import { activeEventAt, calculatePitLoss } from '../../engine/model';
+import { calculatePitLoss } from '../../engine/model';
 import type { CarEntry, Race } from '../../engine/types';
 import { useUnits } from '../../lib/units';
 import { useStore } from '../../store/store';
 import { Field, Modal, NumInput } from '../ui';
 
 /** Records a completed pit stop — the human confirms what actually happened. */
-export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { race: Race; car: CarEntry; p: LiveProjection; nowSec: number; prefill?: { fuelAfterL?: number }; onClose: () => void }) {
+export function PitStopRecorder({ race, car, p, prefill, onClose }: { race: Race; car: CarEntry; p: LiveProjection; prefill?: { fuelAfterL?: number }; onClose: () => void }) {
   const u = useUnits();
   const recordStop = useStore((s) => s.recordStop);
   const ns = p.nextStop;
@@ -30,9 +30,8 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
   const [stationary, setStationary] = useState<number | null>(null);
   const [total, setTotal] = useState<number | null>(null);
   const [note, setNote] = useState('');
-  const ev = activeEventAt(race.events, nowSec);
   const stat = stationary ?? est.stationarySec;
-  const laneSec = ev?.pitLossUnderEventSec ?? est.laneSec;
+  const laneSec = est.laneSec;
   const tot = total ?? laneSec + stat;
   // the car cannot lose less time in the pits than it stood still
   const badLoss = tot < stat;
@@ -63,7 +62,6 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
                 stationaryTimed: stationary != null,
                 totalTimed: total != null,
                 note,
-                underEvent: ev?.type,
               });
               onClose();
             }}
@@ -84,7 +82,6 @@ export function PitStopRecorder({ race, car, p, nowSec, prefill, onClose }: { ra
           </>
         )}{' '}
         Enter what actually happened.
-        {ev && <span className="c-amber"> Stop under {ev.label}.</span>}
       </div>
       <div className="grid-4">
         <Field label="In-lap" hint={inLap === live.lapsCompleted + 1 ? 'Completes current lap' : 'Already counted'}>

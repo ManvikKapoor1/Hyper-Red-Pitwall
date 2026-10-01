@@ -152,7 +152,6 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
   const energySafe = setup.energyEnabled ? p.energyRange.safeWhole : Infinity;
   const resSafe = Math.min(fuelSafe, energySafe);
   const limiter = fuelSafe <= energySafe ? 'Fuel' : 'Energy';
-  const ev = p.activeEvent;
 
   if (!live.pitPhase) {
     if (p.isFinalStint) {
@@ -240,35 +239,6 @@ export function generateRaceCalls(_race: Race, car: CarEntry, p: LiveProjection,
         boxLap: L,
         action: { type: 'boxLap', lap: L },
         altAction: resSafe < 0 ? undefined : { type: 'boxLap', lap: L + 1 },
-      });
-    } else if (ev && ev.pitOpen && L >= p.window.earliest && T - L >= 1) {
-      const green = setup.pitLaneLossSec;
-      const under = ev.pitLossUnderEventSec;
-      calls.push({
-        key: 'BOX_EVENT',
-        text: 'BOX THIS LAP',
-        priority: 'ACTION',
-        reasons: [
-          `${ev.label} — pit lane open`,
-          under != null ? `Pit-lane loss ≈ ${f1(under)} s vs ${f1(green)} s green (entered)` : 'Reduced relative pit loss (not quantified)',
-          `Inside window (earliest lap ${p.window.earliest})`,
-        ],
-        confidence: minConfidence(conf, 'MEDIUM'),
-        alternative: `STAY OUT — TARGET LAP ${T}`,
-        category: 'pit',
-        boxLap: L,
-        action: { type: 'boxLap', lap: L },
-        altAction: { type: 'none' },
-      });
-    } else if (ev && !ev.pitOpen && T - L <= 1) {
-      calls.push({
-        key: 'PIT_CLOSED',
-        text: 'STAY OUT — PIT CLOSED',
-        priority: 'ACTION',
-        reasons: [`${ev.label} — pit entry closed`, `Safe range ${resSafe} laps`],
-        confidence: conf,
-        alternative: resSafe <= 1 ? 'EMERGENCY STOP' : `BOX WHEN OPEN`,
-        category: 'pit',
       });
     } else if (T > L + resSafe - 1) {
       // target beyond safe range → save or box early

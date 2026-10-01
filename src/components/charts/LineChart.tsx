@@ -19,7 +19,7 @@ export interface ChartSeries {
   step?: boolean;
 }
 
-/** Shaded x-range, e.g. a safety car or a tire's beyond-max-life zone. */
+/** Shaded x-range, e.g. a rain shower or a tire's beyond-max-life zone. */
 export interface ChartBand {
   x0: number;
   x1: number;

@@ -145,12 +145,6 @@ function RaceSection({ race }: { race: Race }) {
         <Field label="Rain probability (%)">
           <NumInput value={p.rainProbabilityPct} decimals={0} min={0} max={100} onChange={(v) => set({ rainProbabilityPct: v })} />
         </Field>
-        <Field label="Safety-car assumption" className="span-2">
-          <input className="input" value={p.safetyCarAssumption} onChange={(e) => set({ safetyCarAssumption: e.target.value })} />
-        </Field>
-        <Field label="Slow-zone assumption" className="span-2">
-          <input className="input" value={p.slowZoneAssumption} onChange={(e) => set({ slowZoneAssumption: e.target.value })} />
-        </Field>
       </div>
     </Panel>
   );

@@ -66,7 +66,6 @@ function playRace(c: Case, exact: boolean): RunReport {
           totalLossSec: stop.totalLossSec,
           stationaryTimed: true,
           totalTimed: true,
-          underEvent: stop.underEvent,
         },
         lap.endSec,
         settings,

@@ -100,7 +100,7 @@ export function RaceStatePanel({ race, car, p, onRecordStop }: { race: Race; car
   const startRace = useStore((s) => s.startRace);
   const finishRace = useStore((s) => s.finishRace);
   const { live } = car;
-  const stateColor = p.state === 'SAFETY CAR' || p.state === 'SLOW ZONE' ? 'amber' : p.state.startsWith('PIT') ? 'blue' : p.state === 'FINISH' ? '' : p.state === 'STRATEGY CHANGE' ? 'blue' : 'green';
+  const stateColor = p.state === 'WEATHER' || p.state === 'INCIDENT' ? 'amber' : p.state.startsWith('PIT') ? 'blue' : p.state === 'FINISH' ? '' : p.state === 'STRATEGY CHANGE' ? 'blue' : 'green';
   return (
     <Panel title="Race state" meta={<span className={`rs-now c-${stateColor}`}>{p.state}</span>}>
       <div className="rs-chips">

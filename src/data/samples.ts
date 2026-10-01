@@ -51,8 +51,6 @@ function fujiParams(): RaceParams {
     airTempC: 21,
     trackTempC: 29,
     rainProbabilityPct: 10,
-    safetyCarAssumption: 'Entered live as scenarios (duration & effects typed by pitwall)',
-    slowZoneAssumption: 'Entered live as scenarios',
   };
 }
 
@@ -136,16 +134,15 @@ export function createDemoRace(settings: Settings = DEFAULT_SETTINGS, startLapsC
     demo: { seed: 28, fuelBias: -0.004, energyBias: 0.004, paceBias: 320 },
   };
 
-  const slowZone: ScenarioEvent = {
+  const shower: ScenarioEvent = {
     id: uid('ev'),
-    type: 'SLOW_ZONE',
-    label: 'Slow zone — Sector 3',
+    type: 'RAIN',
+    label: 'Light shower — Sector 3',
     startSec: 2920,
-    durationSec: 150,
+    durationSec: 420,
     lapDeltaSec: 6,
     fuelReductionPct: 8,
     energyReductionPct: 8,
-    pitOpen: true,
   };
 
   const race: Race = {
@@ -156,7 +153,7 @@ export function createDemoRace(settings: Settings = DEFAULT_SETTINGS, startLapsC
     sample: true,
     cars: [car27, car28],
     activeCarId: car27.id,
-    events: [slowZone],
+    events: [shower],
     plannedEvents: [],
     clock: { running: false, anchorRaceSec: 0, anchorEpochMs: Date.now(), speed: 1 },
     createdAt: new Date().toISOString(),
@@ -237,7 +234,7 @@ export function createCompletedSample(settings: Settings = DEFAULT_SETTINGS): Ra
     cars: [car],
     activeCarId: car.id,
     events: [
-      { id: uid('ev'), type: 'SAFETY_CAR', label: 'Safety car — La Source', startSec: 5400, durationSec: 360, lapDeltaSec: 38, fuelReductionPct: 35, energyReductionPct: 40, pitOpen: true, pitLossUnderEventSec: 12 },
+      { id: uid('ev'), type: 'RAIN', label: 'Rain — Les Combes', startSec: 5400, durationSec: 900, lapDeltaSec: 9, fuelReductionPct: 10, energyReductionPct: 12 },
     ],
     plannedEvents: [],
     clock: { running: false, anchorRaceSec: 0, anchorEpochMs: Date.now(), speed: 1 },

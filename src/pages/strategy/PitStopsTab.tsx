@@ -88,7 +88,6 @@ export function PitStopsTab({ race, car, res }: TabProps) {
                 </td>
                 <td className="ellipsis" style={{ maxWidth: 220 }} title={s.reason}>
                   {s.reason}
-                  {s.underEvent && <span className="c-amber"> · under {s.underEvent.replace('_', ' ')}</span>}
                 </td>
               </tr>
             ))}

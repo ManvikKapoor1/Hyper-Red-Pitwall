@@ -40,6 +40,9 @@ import type {
 } from '../engine/types';
 import { storageAdapter } from './persistence';
 
+// scenario types that exist in LMU (declared before the store: hydration migrates synchronously)
+const SCENARIO_TYPES = new Set<string>(['RAIN', 'DRYING', 'CUSTOM']);
+
 export interface SavedStrategy {
   id: string;
   name: string;
@@ -478,7 +481,7 @@ export const useStore = create<AppState>()(
           mapRace(raceId, (r) => ({
             ...r,
             events: [...r.events, { ...ev, id }],
-            cars: r.cars.map((c) => ({ ...c, live: { ...c.live, calls: [...c.live.calls, makeCall(c.live, ev.startSec, `${ev.label.toUpperCase()}`, 'ACTION', `Est. ${Math.round(ev.durationSec / 60)} min · +${ev.lapDeltaSec}s/lap · pit ${ev.pitOpen ? 'OPEN' : 'CLOSED'}`, 'LOGGED', 'event')] } })),
+            cars: r.cars.map((c) => ({ ...c, live: { ...c.live, calls: [...c.live.calls, makeCall(c.live, ev.startSec, `${ev.label.toUpperCase()}`, 'ACTION', `Est. ${Math.round(ev.durationSec / 60)} min · ${ev.lapDeltaSec >= 0 ? '+' : ''}${ev.lapDeltaSec}s/lap · fuel −${ev.fuelReductionPct}%`, 'LOGGED', 'event')] } })),
           }));
           get().toast(`${ev.label} — strategy recalculated`, 'warn');
           return id;
@@ -574,7 +577,14 @@ export const useStore = create<AppState>()(
     },
     {
       name: 'stint.v1',
-      version: 1,
+      // v2: safety car / FCY / VSC / slow zone / red flag removed (not in LMU)
+      version: 2,
+      migrate: (persisted, version) => {
+        const p = (persisted ?? {}) as Partial<AppState>;
+        const races = Array.isArray(p.races) ? p.races.filter(isRaceLike).map(normalizeRace) : [];
+        // sample races are rebuilt with the current scenarios on the next load
+        return version < 2 ? { ...p, races: races.filter((r) => !r.sample && !r.isDemo), seeded: false } : { ...p, races };
+      },
       storage: createJSONStorage(() => storageAdapter),
       partialize: (s) => ({ races: s.races, settings: s.settings, activeRaceId: s.activeRaceId, library: s.library, seeded: s.seeded }),
       merge: (persisted, current) => {
@@ -615,15 +625,36 @@ function syncOthers(r: Race, activeId: string, t: number, st: Settings): Race {
 }
 
 /** Fills lists that older exports may lack, so every page can rely on them. */
+/** An event from an older save: caution types LMU does not have become a custom incident. */
+function normalizeEvent(e: ScenarioEvent): ScenarioEvent {
+  const { id, label, startSec, durationSec, endedSec, lapDeltaSec, fuelReductionPct, energyReductionPct, planned } = e;
+  return { id, type: SCENARIO_TYPES.has(e.type) ? e.type : 'CUSTOM', label, startSec, durationSec, endedSec, lapDeltaSec, fuelReductionPct, energyReductionPct, planned };
+}
+
+/** Fills lists that older exports may lack and drops fields that no longer exist, so every page can rely on them. */
 function normalizeRace(r: Race): Race {
+  const params = { ...r.params } as Race['params'] & Record<string, unknown>;
+  delete params.safetyCarAssumption;
+  delete params.slowZoneAssumption;
   return {
     ...r,
-    events: r.events ?? [],
-    plannedEvents: Array.isArray(r.plannedEvents) ? r.plannedEvents : [],
+    params,
+    events: (r.events ?? []).map(normalizeEvent),
+    plannedEvents: Array.isArray(r.plannedEvents) ? r.plannedEvents.map(normalizeEvent) : [],
     cars: r.cars.map((c) => ({
       ...c,
       versions: Array.isArray(c.versions) ? c.versions : [],
-      live: { ...c.live, stops: c.live.stops ?? [], calls: c.live.calls ?? [], inputs: c.live.inputs ?? [] },
+      live: {
+        ...c.live,
+        laps: c.live.laps.map((l) => (l.event && !SCENARIO_TYPES.has(l.event) ? { ...l, event: 'CUSTOM' as const } : l)),
+        stops: (c.live.stops ?? []).map((st) => {
+          const { underEvent: _drop, ...rest } = st as typeof st & { underEvent?: string };
+          void _drop;
+          return rest;
+        }),
+        calls: c.live.calls ?? [],
+        inputs: c.live.inputs ?? [],
+      },
     })),
   };
 }

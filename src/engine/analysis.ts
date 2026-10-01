@@ -143,9 +143,6 @@ export function postRaceSummary(race: Race, car: CarEntry): PostRaceSummary {
   });
   if (live.stops.length !== planned.stops.length && live.phase === 'finished')
     deviations.push(`Stops: ${live.stops.length} actual vs ${planned.stops.length} planned`);
-  live.stops.forEach((s) => {
-    if (s.underEvent) deviations.push(`Stop ${s.index + 1} taken under ${s.underEvent.replace('_', ' ')}`);
-  });
   const majorDecisions = live.calls
     .filter((c) => c.source === 'override' || c.priority === 'CRITICAL' || c.status === 'CHANGED')
     .map((c) => ({ lap: c.lap, raceTimeSec: c.raceTimeSec, text: c.text, source: c.source }));

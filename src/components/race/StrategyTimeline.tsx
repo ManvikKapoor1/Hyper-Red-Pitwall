@@ -174,7 +174,7 @@ export function StrategyTimeline({
               <b className="lg-drv">D</b> Driver
             </span>
             <span className="lg-i">
-              <i className="lg-ev" /> SC / Slow zone
+              <i className="lg-ev" /> Rain / incident
             </span>
             <span className="lg-i">
               <i className="lg-ver" /> Strategy change

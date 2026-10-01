@@ -270,7 +270,6 @@ function Stops({ car }: { car: CarEntry }) {
                 <td className="n">{u.n(s.stationarySec, 1)}</td>
                 <td className="n">
                   {u.n(s.totalLossSec, 1)}
-                  {s.underEvent && <span className="c-amber"> *</span>}
                 </td>
               </tr>
             ))}

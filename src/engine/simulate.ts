@@ -135,7 +135,6 @@ export interface SimStop {
   totalLossSec: number;
   template: PitTemplate;
   reason: string;
-  underEvent?: ScenarioType;
 }
 
 export type IssueSeverity = 'critical' | 'warning' | 'info';
@@ -514,14 +513,11 @@ function simulateOnce(
       ? resolveRefill(cfg.energy, energyNeeded, Math.max(0, energy), setup.energyCapacityPct)
       : 0;
     const driverChange = next.driverId !== sp.driverId;
-    const ev = activeEventAt(events, t);
-    const laneOverride = ev?.pitOpen && ev.pitLossUnderEventSec != null ? ev.pitLossUnderEventSec : undefined;
     const loss = calculatePitLoss(setup, {
       fuelAddedL: fuelAdd,
       changeTires: cfg.changeTires,
       driverChange,
       extraSec: cfg.extraSec,
-      laneSecOverride: laneOverride,
     });
     const template = deriveTemplate(cfg, fuelAdd, driverChange);
     const entrySec = t;
@@ -557,7 +553,6 @@ function simulateOnce(
       totalLossSec: loss.totalSec,
       template,
       reason: describeStopReason(template, cfg.reason, driverChange, cfg.changeTires),
-      underEvent: ev?.type,
     });
     if (fuelNeeded - Math.max(0, fuel) > setup.fuelCapacityL + 0.01 && cfg.fuel === 'auto') {
       issues.push({

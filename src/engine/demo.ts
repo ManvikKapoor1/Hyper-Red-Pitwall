@@ -119,7 +119,6 @@ export function demoAdvanceLap(race: Race, car: CarEntry, settings: Settings, o:
         toDriverId: s.toDriverId,
         stationarySec: stationary,
         totalLossSec: total,
-        underEvent: ev?.type,
         note: 'Demo feed',
         stationaryTimed: true,
         totalTimed: true,

@@ -36,8 +36,8 @@ export type RaceStateName =
   | 'PIT STOP'
   | 'PIT EXIT'
   | 'NEW STINT'
-  | 'SAFETY CAR'
-  | 'SLOW ZONE'
+  | 'WEATHER'
+  | 'INCIDENT'
   | 'STRATEGY CHANGE'
   | 'FINISH';
 
@@ -51,8 +51,8 @@ export const RACE_STATES: RaceStateName[] = [
   'PIT STOP',
   'PIT EXIT',
   'NEW STINT',
-  'SAFETY CAR',
-  'SLOW ZONE',
+  'WEATHER',
+  'INCIDENT',
   'STRATEGY CHANGE',
   'FINISH',
 ];
@@ -204,7 +204,7 @@ export function measurePace(car: CarEntry, lastN: number) {
       });
       return l.lapMs - pred;
     });
-    // median: one lap in traffic or an untagged caution lap does not move the pace
+    // median: one lap in traffic or an untagged slow lap does not move the pace
     const d = diffs.sort((a, b) => a - b);
     const m = d.length >> 1;
     bias = d.length % 2 ? d[m] : (d[m - 1] + d[m]) / 2;
@@ -230,10 +230,7 @@ export function deriveRaceState(race: Race, car: CarEntry, windowState: WindowSt
   if (live.pitPhase === 'stationary') return 'PIT STOP';
   if (live.pitPhase === 'exit') return 'PIT EXIT';
   const ev = activeEventAt(race.events, nowSec);
-  if (ev) {
-    if (ev.type === 'SLOW_ZONE') return 'SLOW ZONE';
-    if (ev.type === 'SAFETY_CAR' || ev.type === 'FCY' || ev.type === 'VSC' || ev.type === 'RED_FLAG') return 'SAFETY CAR';
-  }
+  if (ev) return ev.type === 'CUSTOM' ? 'INCIDENT' : 'WEATHER';
   if (live.lapsCompleted < 1 && live.stintIndex === 0) return 'START';
   if (live.strategyChangedLap != null && live.lapsCompleted + 1 - live.strategyChangedLap <= 1) return 'STRATEGY CHANGE';
   if (live.stintIndex > 0 && live.lapsCompleted + 1 - live.stintStartLap < 2) return 'NEW STINT';
