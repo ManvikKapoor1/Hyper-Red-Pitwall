@@ -108,7 +108,7 @@ export function FuelTab({ race, car, res }: TabProps) {
                     <td className="n">{r.result.totalLaps}</td>
                     <td className="n">{formatClock(r.result.finishSec)}</td>
                     <td className={`n ${marginClass(r.result.minFuelMarginLaps)}`}>{u.n(r.result.minFuelMarginLaps, 2)}</td>
-                    <td className={crit.length ? 'c-red ellipsis' : 'dim'} style={{ maxWidth: 260 }} title={crit.map((c) => c.message).join('\n')}>
+                    <td className={`ellipsis ${crit.length ? 'c-red' : 'dim'}`} title={crit.map((c) => c.message).join('\n')}>
                       {crit.length ? crit[0].message : 'OK'}
                     </td>
                   </tr>

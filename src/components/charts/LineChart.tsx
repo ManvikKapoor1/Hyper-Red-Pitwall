@@ -142,6 +142,20 @@ export function LineChart(props: LineChartProps) {
     return d;
   };
 
+  // vertical-line labels (P1, P2 …) are skipped where they would run into the previous one
+  const vlineShown: boolean[] = [];
+  {
+    let lastEnd = -Infinity;
+    vlines.forEach((v, i) => {
+      if (!v.label) return void (vlineShown[i] = false);
+      const width = v.label.length * 6.5 + 4;
+      const x = sx(v.x);
+      const start = v.anchor === 'end' ? x - 3 - width : x + 3;
+      vlineShown[i] = start >= lastEnd;
+      if (vlineShown[i]) lastEnd = start + width;
+    });
+  }
+
   const nearest = (px: number) => {
     if (!xs.length) return null;
     const x = x0 + ((px - padL) / iw) * (x1 - x0);
@@ -209,7 +223,7 @@ export function LineChart(props: LineChartProps) {
           {vlines.map((v, i) => (
             <g key={i}>
               <line className="lc-vline" x1={sx(v.x)} x2={sx(v.x)} y1={PAD.t} y2={PAD.t + ih} />
-              {v.label && (
+              {v.label && vlineShown[i] && (
                 <text className="lc-vlabel" x={sx(v.x) + (v.anchor === 'end' ? -3 : 3)} y={PAD.t + 8} textAnchor={v.anchor ?? 'start'}>
                   {v.label}
                 </text>

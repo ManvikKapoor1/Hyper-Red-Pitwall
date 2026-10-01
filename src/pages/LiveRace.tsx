@@ -119,7 +119,7 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
               {p.current && (
                 <tr className="cur">
                   <td className="mono">S{p.current.index + 1}</td>
-                  <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, p.current.driverId)}</td>
+                  <td className="ellipsis">{driverName(car, p.current.driverId)}</td>
                   <td className="n">{p.current.laps}</td>
                   <td className="n">{p.current.final ? 'FLAG' : p.current.endLap}</td>
                   <td className="dim">NOW</td>
@@ -135,10 +135,10 @@ function LiveRace({ race, car }: { race: Race; car: CarEntry }) {
                 return (
                   <tr key={s.index}>
                     <td className="mono">S{s.index + 1}</td>
-                    <td className="ellipsis" style={{ maxWidth: 140 }}>{driverName(car, s.driverId)}</td>
+                    <td className="ellipsis">{driverName(car, s.driverId)}</td>
                     <td className="n">{s.laps}</td>
                     <td className="n">{s.final ? 'FLAG' : s.endLap}</td>
-                    <td className="ellipsis" style={{ maxWidth: 170 }}>{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
+                    <td className="ellipsis">{stp ? TEMPLATE_LABEL[stp.template] : ''}</td>
                     <td className={s.newTires ? '' : 'dim'}>{s.newTires ? `NEW ${s.compound}` : `${s.compound} +${s.tireAgeStart}`}</td>
                     <td className="n">{stp ? u.fuel(stp.fuelAddedL) : '—'}</td>
                     <td className={`n ${marginClass(s.fuelMarginLaps, crit)}`}>{u.n(s.fuelMarginLaps, 1)}</td>

@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { actualStints } from '../../engine/analysis';
 import { formatHM } from '../../engine/format';
 import type { LiveProjection } from '../../engine/live';
@@ -131,6 +131,18 @@ export function StrategyTimeline({
 }) {
   const [zoom, setZoom] = useState(1);
   const scroller = useRef<HTMLDivElement>(null);
+  // drawn width in px: labels and stop icons only show where they fit (no text on top of text)
+  const [px, setPx] = useState(0);
+  useEffect(() => {
+    const el = scroller.current;
+    if (!el || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => setPx(el.clientWidth));
+    ro.observe(el);
+    setPx(el.clientWidth);
+    return () => ro.disconnect();
+  }, []);
+  const innerPx = px * zoom;
+  const fits = (pct: number, need: number) => !px || (pct / 100) * innerPx >= need;
   const drv = useMemo(() => new Map(car.drivers.map((d) => [d.id, d])), [car.drivers]);
   const domain = axis === 'lap' ? Math.max(1, totalLaps) : Math.max(1, totalSec);
   const posLap = (lap: number) => ((lap - 1) / domain) * 100; // start of lap
@@ -233,6 +245,8 @@ export function StrategyTimeline({
                   const { l, r } = bx(b);
                   const d = drv.get(b.driverId);
                   const w = Math.max(0.2, r - l);
+                  const showT = fits(w, 26);
+                  const showS = !compact && fits(w, 60);
                   return (
                     <button
                       key={`${lane.key}-${b.index}-${b.kind}`}
@@ -241,11 +255,13 @@ export function StrategyTimeline({
                       onClick={() => onSelect?.(b.index)}
                       title={`Stint ${b.index + 1} · ${d?.name ?? '—'} · L${b.startLap}–${b.endLap} (${b.laps} laps) · ${b.compound}${b.flag ? ' · ' + b.flag : ''}`}
                     >
-                      <span className="tl-b-t">
-                        S{b.index + 1}
-                        <em>{d?.code ?? ''}</em>
-                      </span>
-                      {!compact && (
+                      {showT && (
+                        <span className="tl-b-t">
+                          S{b.index + 1}
+                          {fits(w, 52) && <em>{d?.code ?? ''}</em>}
+                        </span>
+                      )}
+                      {showS && (
                         <span className="tl-b-s">
                           {b.laps}L · {b.compound.slice(0, 1)}
                           {b.final ? ' · FLAG' : ''}
@@ -254,15 +270,23 @@ export function StrategyTimeline({
                     </button>
                   );
                 })}
-                {lane.data.stops.map((s, i) => (
-                  <span key={`${lane.key}-stop-${i}`} className={`tl-stop ${s.kind}`} style={{ left: `${sx(s)}%` }} title={`${s.label}${s.fuel ? ' · fuel' : ''}${s.tires ? ' · tires' : ''}${s.driver ? ' · driver change' : ''}`}>
-                    <span className="tl-stop-icons">
-                      {s.fuel && <b className="lg-fuel">F</b>}
-                      {s.tires && <b className="lg-tire">T</b>}
-                      {s.driver && <b className="lg-drv">D</b>}
+                {lane.data.stops.map((s, i, all) => {
+                  // icons sit right of the marker: only when they clear the next stop
+                  const icons = (s.fuel ? 1 : 0) + (s.tires ? 1 : 0) + (s.driver ? 1 : 0);
+                  const next = all[i + 1];
+                  const room = next ? sx(next) - sx(s) : 100 - sx(s);
+                  return (
+                    <span key={`${lane.key}-stop-${i}`} className={`tl-stop ${s.kind}`} style={{ left: `${sx(s)}%` }} title={`${s.label}${s.fuel ? ' · fuel' : ''}${s.tires ? ' · tires' : ''}${s.driver ? ' · driver change' : ''}`}>
+                      {icons > 0 && fits(room, icons * 12 + 6) && (
+                        <span className="tl-stop-icons">
+                          {s.fuel && <b className="lg-fuel">F</b>}
+                          {s.tires && <b className="lg-tire">T</b>}
+                          {s.driver && <b className="lg-drv">D</b>}
+                        </span>
+                      )}
                     </span>
-                  </span>
-                ))}
+                  );
+                })}
               </div>
             ))}
             {!compact && (
@@ -273,7 +297,7 @@ export function StrategyTimeline({
                   const r = ex(end);
                   return (
                     <span key={e.id} className={`tl-ev ${e.planned ? 'planned' : ''}`} style={{ left: `${l}%`, width: `${Math.max(0.3, r - l)}%` }} title={`${e.label} · ${formatHM(e.startSec)}–${formatHM(end)}`}>
-                      {e.type.replace('_', ' ')}
+                      {e.type === 'CUSTOM' ? 'INCIDENT' : e.type}
                     </span>
                   );
                 })}
@@ -292,9 +316,7 @@ export function StrategyTimeline({
               </div>
             )}
             {nowX != null && (
-              <span className="tl-now" style={{ left: `${nowX}%` }}>
-                <span>NOW</span>
-              </span>
+              <span className="tl-now" style={{ left: `${nowX}%` }} title={`Now · lap ${nowLap}`} />
             )}
           </div>
         </div>

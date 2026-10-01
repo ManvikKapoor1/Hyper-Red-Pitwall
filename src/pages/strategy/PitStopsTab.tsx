@@ -86,7 +86,7 @@ export function PitStopsTab({ race, car, res }: TabProps) {
                 <td className="n">
                   <b>{u.n(s.totalLossSec, 1)}</b>
                 </td>
-                <td className="ellipsis" style={{ maxWidth: 220 }} title={s.reason}>
+                <td className="ellipsis" title={s.reason}>
                   {s.reason}
                 </td>
               </tr>

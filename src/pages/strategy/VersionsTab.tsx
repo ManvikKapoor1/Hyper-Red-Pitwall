@@ -44,7 +44,7 @@ export function VersionsTab({ race, car, res }: TabProps) {
                       v{v.version} {i === 0 && <Badge size="sm" color="blue">Latest</Badge>}
                     </td>
                     <td>{v.label}</td>
-                    <td className="ellipsis" style={{ maxWidth: 320 }} title={v.reason}>
+                    <td className="ellipsis" title={v.reason}>
                       {v.reason}
                     </td>
                     <td className="n">{v.lap != null && v.lap > 0 ? `L${v.lap}` : 'pre-race'}</td>

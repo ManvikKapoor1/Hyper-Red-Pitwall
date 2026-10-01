@@ -293,7 +293,7 @@ function InputLog({ car }: { car: CarEntry }) {
               <tr key={i.id}>
                 <td className="n dim">{formatClock(i.raceTimeSec)}</td>
                 <td className="n">L{i.lap}</td>
-                <td className="ellipsis" style={{ maxWidth: 260 }} title={i.summary}>
+                <td className="ellipsis" title={i.summary}>
                   {i.summary}
                 </td>
               </tr>

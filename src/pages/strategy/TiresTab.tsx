@@ -95,7 +95,7 @@ export function TiresTab({ race, car, res }: TabProps) {
                   <td className="n">{r.totalLaps}</td>
                   <td className="n">{formatClock(r.finishSec)}</td>
                   <td className="n">{i === 0 ? '—' : `${formatDelta(r.totalPitLossSec - base.totalPitLossSec, 1)} s`}</td>
-                  <td className={`ellipsis ${crit.length ? 'c-red' : warn.length ? 'c-amber' : 'dim'}`} style={{ maxWidth: 260 }} title={[...crit, ...warn].map((c) => c.message).join('\n')}>
+                  <td className={`ellipsis ${crit.length ? 'c-red' : warn.length ? 'c-amber' : 'dim'}`} title={[...crit, ...warn].map((c) => c.message).join('\n')}>
                     {shown.length ? `${shown.length} ${crit.length ? 'critical' : `warning${shown.length > 1 ? 's' : ''}`} — ${shown[0].message}` : 'OK'}
                   </td>
                   <td className="right">
